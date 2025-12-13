@@ -1,17 +1,20 @@
 package io.github.hcisme.mediasoupclient.controller
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.MediaConstraints
 import org.webrtc.PeerConnectionFactory
 
 class AudioController(
-    context: Context,
+    private val context: Context,
     private val factory: PeerConnectionFactory
 ) {
     companion object {
@@ -36,6 +39,11 @@ class AudioController(
      * 创建本地音频轨道 (开启麦克风采集)
      */
     fun createLocalAudioTrack(): AudioTrack? {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "createLocalAudioTrack() failed: No RECORD_AUDIO permission")
+            return null
+        }
         if (audioTrack != null) return audioTrack
 
         // 开启回声消除、增益控制、降噪

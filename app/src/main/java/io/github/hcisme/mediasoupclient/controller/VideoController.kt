@@ -1,7 +1,10 @@
 package io.github.hcisme.mediasoupclient.controller
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import io.github.hcisme.mediasoupclient.utils.WebRTCConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +49,13 @@ class VideoController(
      * 开启摄像头
      */
     fun start() {
+        // 检查权限
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.e(TAG, "start() failed: No CAMERA permission")
+            return
+        }
         if (_localVideoTrackFlow.value != null) {
             Log.w(TAG, "start() called but video track already exists.")
             return

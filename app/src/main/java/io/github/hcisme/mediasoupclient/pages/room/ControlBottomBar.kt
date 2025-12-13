@@ -3,9 +3,7 @@ package io.github.hcisme.mediasoupclient.pages.room
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -27,12 +25,11 @@ fun ControlBottomBar(
     isCameraOff: Boolean,
     onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
+    onSwitchCamera: () -> Unit,
     onHangUp: () -> Unit
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(
             space = 24.dp,
             alignment = Alignment.CenterHorizontally
@@ -46,6 +43,27 @@ fun ControlBottomBar(
             onClick = onToggleMic
         )
 
+        // 摄像头按钮
+        ControlButton(
+            icon = if (isCameraOff) R.drawable.camera_off else R.drawable.camera_on,
+            isActive = !isCameraOff,
+            onClick = onToggleCamera
+        )
+
+        // 切换摄像头前后的按钮
+        IconButton(
+            onClick = onSwitchCamera,
+            modifier = Modifier
+                .size(56.dp)
+                .background(Color.White, CircleShape)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.toggle_camera),
+                contentDescription = "toggle_camera",
+                tint = Color.Black
+            )
+        }
+
         // 挂断按钮
         IconButton(
             onClick = onHangUp,
@@ -55,18 +73,11 @@ fun ControlBottomBar(
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Hangup", tint = Color.White)
         }
-
-        // 摄像头按钮
-        ControlButton(
-            icon = if (isCameraOff) R.drawable.camera_off else R.drawable.camera_on,
-            isActive = !isCameraOff,
-            onClick = onToggleCamera
-        )
     }
 }
 
 @Composable
-fun ControlButton(
+private fun ControlButton(
     icon: Int,
     isActive: Boolean,
     onClick: () -> Unit

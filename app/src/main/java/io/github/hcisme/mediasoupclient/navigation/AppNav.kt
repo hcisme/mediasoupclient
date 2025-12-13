@@ -30,19 +30,23 @@ fun AppNav() {
         }
 
         composable(
-            route = "${NavRouteConstant.ROOM}/{roomId}",
+            route = "${NavRouteConstant.ROOM}/{roomId}?cam={cam}&mic={mic}",
             arguments = listOf(
-                navArgument("roomId") { type = NavType.StringType }
+                navArgument("roomId") { type = NavType.StringType },
+                navArgument("cam") { type = NavType.BoolType },
+                navArgument("mic") { type = NavType.BoolType }
             )
         ) { backStackEntry ->
             val roomId = backStackEntry.arguments?.getString("roomId")
                 ?: error("Nav Param roomId not be null")
+            val isOpenCamera = backStackEntry.arguments?.getBoolean("cam") ?: false
+            val isOpenMic = backStackEntry.arguments?.getBoolean("mic") ?: false
 
             MediaSoupClientTheme(
                 dynamicColor = false,
                 darkTheme = true
             ) {
-                RoomPage(roomId = roomId)
+                RoomPage(roomId = roomId, isOpenCamera = isOpenCamera, isOpenMic = isOpenMic)
             }
         }
     }

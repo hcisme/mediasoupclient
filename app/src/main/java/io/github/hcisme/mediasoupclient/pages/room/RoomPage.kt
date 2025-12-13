@@ -8,35 +8,36 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import io.github.hcisme.mediasoupclient.components.Dialog
 import io.github.hcisme.mediasoupclient.components.VideoTile
-import io.github.hcisme.mediasoupclient.model.RemoteStreamState
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
 import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoomPage(roomId: String) {
+fun RoomPage(
+    roomId: String,
+    isOpenCamera: Boolean,
+    isOpenMic: Boolean
+) {
     val view = LocalView.current
     val insetsController = remember(view) {
         if (!view.isInEditMode) {
@@ -58,7 +59,7 @@ fun RoomPage(roomId: String) {
     // 远程状态 Map <ProducerId, RemoteStreamState>
     val remoteStates by roomClient.remoteStreamStates.collectAsState()
 
-    SideEffect {
+    LaunchedEffect(Unit) {
         insetsController?.apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
@@ -79,7 +80,7 @@ fun RoomPage(roomId: String) {
 
     LaunchedEffect(Unit) {
         roomClient.audioController.setSpeakerphoneOn(true)
-        roomClient.startLocalMedia()
+        roomClient.startLocalMedia(isOpenCamera = isOpenCamera, isOpenMic = isOpenMic)
     }
 
     BackHandler { backDialogVisible = true }
@@ -90,19 +91,7 @@ fun RoomPage(roomId: String) {
             .background(MaterialTheme.colorScheme.background)
             .navigationBarsPadding()
     ) {
-        TopAppBar(
-            title = { roomId?.let { Text(text = it) } },
-            navigationIcon = {
-                IconButton(
-                    onClick = { backDialogVisible = true }
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回"
-                    )
-                }
-            }
-        )
+        TopAppBar(title = { roomId?.let { Text(text = it) } })
 
         Box(
             modifier = Modifier
@@ -120,8 +109,7 @@ fun RoomPage(roomId: String) {
                         networkScore = 10,
                         label = "Me (Waiting...)",
                         isLocal = true,
-                        isFrontCamera = localState.isFrontCamera,
-                        onDoubleClick = { roomClient.videoController.switchCamera() }
+                        isFrontCamera = localState.isFrontCamera
                     )
                 }
 
@@ -132,8 +120,7 @@ fun RoomPage(roomId: String) {
                         isLocalMicMuted = localState.isMicMuted,
                         isFrontCamera = localState.isFrontCamera,
                         remoteVideoTracksMap = remoteVideoTracksMap,
-                        remoteStates = remoteStates,
-                        onSwitchCamera = { roomClient.videoController.switchCamera() }
+                        remoteStates = remoteStates
                     )
                 }
 
@@ -144,26 +131,26 @@ fun RoomPage(roomId: String) {
                         isLocalMicMuted = localState.isMicMuted,
                         isFrontCamera = localState.isFrontCamera,
                         remoteVideoTracksMap = remoteVideoTracksMap,
-                        remoteStates = remoteStates,
-                        onSwitchCamera = { roomClient.videoController.switchCamera() }
+                        remoteStates = remoteStates
                     )
                 }
             }
-        }
 
-        ControlBottomBar(
-            isMicMuted = localState.isMicMuted,
-            isCameraOff = localState.isCameraOff,
-            onToggleMic = {
-                roomClient.toggleMic()
-            },
-            onToggleCamera = {
-                roomClient.toggleCamera()
-            },
-            onHangUp = {
-                backDialogVisible = true
-            }
-        )
+            ControlBottomBar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(bottom = 16.dp),
+                isMicMuted = localState.isMicMuted,
+                isCameraOff = localState.isCameraOff,
+                onToggleMic = { roomClient.toggleMic() },
+                onToggleCamera = { roomClient.toggleCamera() },
+                onSwitchCamera = { roomClient.videoController.switchCamera() },
+                onHangUp = {
+                    backDialogVisible = true
+                }
+            )
+        }
     }
 
     Dialog(
@@ -171,6 +158,7 @@ fun RoomPage(roomId: String) {
         confirmButtonText = "确定",
         cancelButtonText = "取消",
         onConfirm = {
+            backDialogVisible = false
             navHostController.popBackStack()
         },
         onDismissRequest = { backDialogVisible = false }
@@ -178,29 +166,3 @@ fun RoomPage(roomId: String) {
         Text("确认退出房间吗")
     }
 }
-
-/**
- * 返回结果：Name, isMicMuted, isCameraOff, Score
- */
-fun parseRemoteState(
-    videoProducerId: String,
-    statesMap: Map<String, RemoteStreamState>
-): Tuple4<String, Boolean, Boolean, Int> {
-    val videoState = statesMap[videoProducerId]
-    val socketId = videoState?.socketId
-    val isCameraOff = videoState?.isPaused == true
-    val videoScore = videoState?.score ?: 0
-    val label = "User ${socketId?.takeLast(4) ?: "..."}"
-
-    // 寻找音频状态 (同 socketId 且 kind="audio")
-    val audioState = statesMap.values.find {
-        it.socketId == socketId && it.kind == "audio"
-    }
-    val isMicMuted = audioState?.isPaused == true // 暂停即静音
-
-    return Tuple4(label, isMicMuted, isCameraOff, videoScore)
-}
-
-data class Tuple4<A, B, C, D>(
-    val first: A, val second: B, val third: C, val fourth: D
-)

@@ -1,6 +1,7 @@
 package io.github.hcisme.mediasoupclient.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import org.webrtc.EglBase
@@ -17,34 +18,39 @@ fun VideoRenderer(
     eglContext: EglBase.Context,
     isOverlay: Boolean = false
 ) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            SurfaceViewRenderer(context).apply {
-                init(eglContext, null)
-                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
-                setEnableHardwareScaler(true)
-                setZOrderMediaOverlay(isOverlay)
-            }
-        },
-        update = { view ->
-            if (track != null) {
-                track.addSink(view)
-            } else {
-                view.clearImage()
-            }
+    key(track?.id()) {
+        AndroidView(
+            modifier = modifier,
+            factory = { context ->
+                SurfaceViewRenderer(context).apply {
+                    init(eglContext, null)
+                    setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                    setEnableHardwareScaler(true)
+                    setZOrderMediaOverlay(isOverlay)
+                }
+            },
+            update = { view ->
+                try {
+                    // 先清空当前的 sink (防止重复添加)
+                    track?.removeSink(view)
 
-            // 如果是本地视频 且 使用的是前置摄像头 -> 开启镜像
-            // 否则（本地后置、或者远端视频） -> 关闭镜像
-            val shouldMirror = isLocal && isFrontCamera
-            view.setMirror(shouldMirror)
-        },
-        onRelease = { view ->
-            try {
-                track?.removeSink(view)
-                view.release()
-            } catch (_: Exception) {
+                    if (track != null) {
+                        track.addSink(view)
+                        val shouldMirror = isLocal && isFrontCamera
+                        view.setMirror(shouldMirror)
+                    } else {
+                        view.clearImage()
+                    }
+                } catch (_: Exception) {
+                }
+            },
+            onRelease = { view ->
+                try {
+                    track?.removeSink(view)
+                    view.release()
+                } catch (_: Exception) {
+                }
             }
-        }
-    )
+        )
+    }
 }

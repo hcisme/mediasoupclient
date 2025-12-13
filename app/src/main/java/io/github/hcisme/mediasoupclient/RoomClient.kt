@@ -490,26 +490,48 @@ class RoomClient(private val context: Context) {
         socket?.emit(SocketEvent.RESUME, resumeRequest)
     }
 
-    fun startLocalMedia() {
-        videoController.start()
+    /**
+     * 开启本地媒体 摄像头 Mic
+     */
+    fun startLocalMedia(isOpenCamera: Boolean, isOpenMic: Boolean) {
+        _localState.update { it.copy(isCameraOff = !isOpenCamera, isMicMuted = !isOpenMic) }
+
+        // 处理视频
+        if (isOpenCamera) {
+            videoController.start()
+            val videoTrack = videoController.localVideoTrackFlow.value
+
+            if (videoTrack != null && sendTransport != null) {
+                localVideoProducer = sendTransport?.produce(
+                    listener = producerListener("Video"),
+                    track = videoTrack
+                )
+            } else {
+                Log.w(TAG, "Video start failed (no permission?), rolling back state")
+                _localState.update { it.copy(isCameraOff = true) }
+            }
+        } // else: 如果 isOpenCamera=false，则不采集、不推流
+
         // 音频输出
         audioController.initAudioSystem()
         // 音频输入
         val audioTrack = audioController.createLocalAudioTrack()
-
-        // 获取当前视频 Track 发送 Transport produce
-        videoController.localVideoTrackFlow.value?.let {
-            localVideoProducer = sendTransport?.produce(
-                listener = producerListener("Video"),
-                track = it,
-            )
-        }
-
-        audioTrack?.let {
+        if (audioTrack != null && sendTransport != null) {
             localAudioProducer = sendTransport?.produce(
                 listener = producerListener("Audio"),
-                track = it,
+                track = audioTrack
             )
+            if (!isOpenMic) {
+                localAudioProducer!!.pause()
+                socket?.emit(
+                    SocketEvent.PAUSE_PRODUCER,
+                    JSONObject().put("producerId", localAudioProducer!!.id)
+                )
+                audioController.setMicMuted(true)
+            }
+        } else {
+            Log.w(TAG, "Audio start failed (no permission?), rolling back state")
+            _localState.update { it.copy(isMicMuted = true) }
         }
     }
 
@@ -523,7 +545,20 @@ class RoomClient(private val context: Context) {
      * 开关本地麦克风
      */
     fun toggleMic() {
-        val producer = localAudioProducer ?: return
+        if (localAudioProducer == null) {
+            val audioTrack = audioController.createLocalAudioTrack()
+            if (audioTrack != null && sendTransport != null) {
+                localAudioProducer = sendTransport?.produce(
+                    listener = producerListener("Audio"),
+                    track = audioTrack
+                )
+            } else {
+                Log.e(TAG, "Toggle mic failed: still no permission or device error")
+                return
+            }
+        }
+
+        val producer = localAudioProducer!!
         val newMuted = !_localState.value.isMicMuted
 
         scope.launch {
@@ -556,29 +591,48 @@ class RoomClient(private val context: Context) {
      * 开关本地摄像头
      */
     fun toggleCamera() {
-        val producer = localVideoProducer ?: return
-        val track = videoController.localVideoTrackFlow.value ?: return
         val newOff = !_localState.value.isCameraOff
 
         scope.launch {
             try {
                 if (newOff) {
-                    producer.pause()
+                    localVideoProducer?.pause()
                     socket?.emit(
                         SocketEvent.PAUSE_PRODUCER,
-                        JSONObject().put("producerId", producer.id)
+                        JSONObject().put("producerId", localVideoProducer?.id)
                     )
 
-                    track.setEnabled(false)
+                    videoController.localVideoTrackFlow.value?.setEnabled(false)
                     videoController.stopCapture()
                 } else {
-                    videoController.resumeCapture()
+                    if (videoController.localVideoTrackFlow.value == null) {
+                        videoController.start()
+                    } else {
+                        videoController.resumeCapture()
+                    }
+                    val track = videoController.localVideoTrackFlow.value
+                    if (track == null) {
+                        Log.e(TAG, "Failed to start camera (no permission?)")
+                        // 保持 isCameraOff = true (不更新状态)，并直接返回
+                        return@launch
+                    }
                     track.setEnabled(true)
-                    producer.resume()
-                    socket?.emit(
-                        SocketEvent.RESUME_PRODUCER,
-                        JSONObject().put("producerId", producer.id)
-                    )
+
+                    if (localVideoProducer == null) {
+                        if (sendTransport != null) {
+                            localVideoProducer = sendTransport!!.produce(
+                                listener = producerListener("Video"),
+                                track = track
+                            )
+                        }
+                    } else {
+                        // 只是恢复
+                        localVideoProducer!!.resume()
+                        socket?.emit(
+                            SocketEvent.RESUME_PRODUCER,
+                            JSONObject().put("producerId", localVideoProducer!!.id)
+                        )
+                    }
                 }
                 _localState.update { it.copy(isCameraOff = newOff) }
                 Log.d(TAG, "Camera toggled: off=$newOff")
@@ -588,12 +642,15 @@ class RoomClient(private val context: Context) {
         }
     }
 
+    /**
+     * 退出房间调用
+     */
     fun exitRoom() {
         _currentRoomId.update { null }
         isJoiningOrJoined = false
 
         // 断开 Socket
-        socket?.apply { disconnect(); off() }
+        socket?.apply { disconnect(); off(); }
         socket = null
         videoController.dispose()
         audioController.dispose()
@@ -609,18 +666,25 @@ class RoomClient(private val context: Context) {
         consumerIdToProducerId.clear()
 
         // 释放 Mediasoup 对象
-        runCatching {
-            sendTransport?.apply { close(); dispose() }
-            sendTransport = null
+        try {
+            localVideoProducer?.close()
+            localAudioProducer?.close()
+        } catch (error: Exception) {
+            Log.e(TAG, "Release Producer Object Error", error)
+        }
+        localVideoProducer = null
+        localAudioProducer = null
 
-            recvTransport?.apply { close(); dispose() }
-            recvTransport = null
-
+        try {
+            sendTransport?.apply { close(); dispose(); }
+            recvTransport?.apply { close(); dispose(); }
             device?.dispose()
-            device = null
-        }.onFailure { error ->
+        } catch (error: Exception) {
             Log.e(TAG, "Release Mediasoup Object Error", error)
         }
+        sendTransport = null
+        recvTransport = null
+        device = null
 
         Log.d(TAG, "Exited Room And Cleaned Up Resources")
     }
