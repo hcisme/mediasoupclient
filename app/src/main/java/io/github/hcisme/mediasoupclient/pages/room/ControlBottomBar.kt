@@ -45,7 +45,7 @@ fun ControlBottomBar(
 
         // 摄像头按钮
         ControlButton(
-            icon = if (isCameraOff) R.drawable.camera_off else R.drawable.camera_on,
+            icon = if (isCameraOff) R.drawable.cam_off else R.drawable.cam_on,
             isActive = !isCameraOff,
             onClick = onToggleCamera
         )
@@ -58,7 +58,7 @@ fun ControlBottomBar(
                 .background(Color.White, CircleShape)
         ) {
             Icon(
-                painter = painterResource(R.drawable.toggle_camera),
+                painter = painterResource(R.drawable.flip_camera),
                 contentDescription = "toggle_camera",
                 tint = Color.Black
             )

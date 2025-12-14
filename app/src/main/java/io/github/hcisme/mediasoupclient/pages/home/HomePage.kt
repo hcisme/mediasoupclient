@@ -129,7 +129,7 @@ fun HomePage() {
                 // 摄像头开关
                 DeviceToggleButton(
                     modifier = Modifier.weight(1f),
-                    id = if (isOpenCamera) R.drawable.camera_on else R.drawable.camera_off,
+                    id = if (isOpenCamera) R.drawable.cam_on else R.drawable.cam_off,
                     label = if (isOpenCamera) "摄像头开启" else "摄像头关闭",
                     isChecked = isOpenCamera,
                     onCheckedChange = { isOpenCamera = it }
