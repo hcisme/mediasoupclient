@@ -230,21 +230,22 @@ class VideoController(
             // 停止硬件占用
             videoCapturer?.stopCapture()
             videoCapturer?.dispose()
-            videoCapturer = null
 
             // 释放 Source
             videoSource?.dispose()
-            videoSource = null
 
             // 释放 Track
             _localVideoTrackFlow.value?.dispose()
-            _localVideoTrackFlow.value = null
 
             // 释放 EGL 上下文
             surfaceTextureHelper?.dispose()
-            surfaceTextureHelper = null
         } catch (e: Exception) {
             Log.e(TAG, "Error disposing video resources", e)
+        } finally {
+            videoCapturer = null
+            videoSource = null
+            _localVideoTrackFlow.value = null
+            surfaceTextureHelper = null
         }
     }
 }

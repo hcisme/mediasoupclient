@@ -2,7 +2,7 @@ package io.github.hcisme.mediasoupclient.utils
 
 import androidx.compose.runtime.compositionLocalOf
 import androidx.navigation.NavHostController
-import io.github.hcisme.mediasoupclient.RoomClient
+import io.github.hcisme.mediasoupclient.client.RoomClient
 
 val LocalNavController = compositionLocalOf<NavHostController> { error("No NavController found!") }
 

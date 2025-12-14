@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.hcisme.mediasoupclient.R
-import io.github.hcisme.mediasoupclient.RoomClient
+import io.github.hcisme.mediasoupclient.client.RoomClient
 import org.webrtc.VideoTrack
 
 @Composable

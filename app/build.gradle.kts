@@ -54,6 +54,7 @@ dependencies {
 
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.accompanist.permissions)
     implementation(libs.socket.io.client)
     implementation(libs.kotlinx.serialization.json.jvm)
     implementation(libs.libmediasoup.android)

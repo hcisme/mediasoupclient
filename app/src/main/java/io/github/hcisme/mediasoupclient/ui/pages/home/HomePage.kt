@@ -1,4 +1,4 @@
-package io.github.hcisme.mediasoupclient.pages.home
+package io.github.hcisme.mediasoupclient.ui.pages.home
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
@@ -30,10 +30,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +40,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.R
 import io.github.hcisme.mediasoupclient.navigation.navigationToRoom
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
@@ -54,12 +51,8 @@ fun HomePage() {
     val focusManager = LocalFocusManager.current
     val navHostController = LocalNavController.current
     val roomClient = LocalRoomClient.current
+    val homeVM = viewModel<HomeViewModel>()
 
-    // 状态管理
-    var roomId by remember { mutableStateOf("12345") }
-    var isEntering by remember { mutableStateOf(false) }
-    var isOpenCamera by remember { mutableStateOf(true) }
-    var isOpenMic by remember { mutableStateOf(true) }
 
     Box(
         modifier = Modifier
@@ -104,8 +97,8 @@ fun HomePage() {
             Spacer(modifier = Modifier.height(48.dp))
 
             OutlinedTextField(
-                value = roomId,
-                onValueChange = { if (it.length <= 10) roomId = it },
+                value = homeVM.roomId,
+                onValueChange = { if (it.length <= 10) homeVM.roomId = it },
                 label = { Text("房间 ID") },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium,
@@ -129,19 +122,19 @@ fun HomePage() {
                 // 摄像头开关
                 DeviceToggleButton(
                     modifier = Modifier.weight(1f),
-                    id = if (isOpenCamera) R.drawable.cam_on else R.drawable.cam_off,
-                    label = if (isOpenCamera) "摄像头开启" else "摄像头关闭",
-                    isChecked = isOpenCamera,
-                    onCheckedChange = { isOpenCamera = it }
+                    id = if (homeVM.isOpenCamera) R.drawable.cam_on else R.drawable.cam_off,
+                    label = if (homeVM.isOpenCamera) "摄像头开启" else "摄像头关闭",
+                    isChecked = homeVM.isOpenCamera,
+                    onCheckedChange = { homeVM.isOpenCamera = it }
                 )
 
                 // 麦克风开关
                 DeviceToggleButton(
                     modifier = Modifier.weight(1f),
-                    id = if (isOpenMic) R.drawable.mic_on else R.drawable.mic_off,
-                    label = if (isOpenMic) "麦克风开启" else "麦克风关闭",
-                    isChecked = isOpenMic,
-                    onCheckedChange = { isOpenMic = it }
+                    id = if (homeVM.isOpenMic) R.drawable.mic_on else R.drawable.mic_off,
+                    label = if (homeVM.isOpenMic) "麦克风开启" else "麦克风关闭",
+                    isChecked = homeVM.isOpenMic,
+                    onCheckedChange = { homeVM.isOpenMic = it }
                 )
             }
 
@@ -149,22 +142,22 @@ fun HomePage() {
 
             Button(
                 onClick = {
-                    if (roomId.isBlank()) return@Button
-                    isEntering = true
+                    if (homeVM.roomId.isBlank()) return@Button
+                    homeVM.isEntering = true
                     focusManager.clearFocus()
 
                     roomClient.connectToRoom(
-                        roomId = roomId,
+                        roomId = homeVM.roomId,
                         onSuccess = {
-                            isEntering = false
+                            homeVM.isEntering = false
                             navHostController.navigationToRoom(
-                                roomId = roomId,
-                                cam = isOpenCamera,
-                                mic = isOpenMic
+                                roomId = homeVM.roomId,
+                                cam = homeVM.isOpenCamera,
+                                mic = homeVM.isOpenMic
                             )
                         },
                         onError = {
-                            isEntering = false
+                            homeVM.isEntering = false
                         }
                     )
                 },
@@ -172,12 +165,12 @@ fun HomePage() {
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = MaterialTheme.shapes.medium,
-                enabled = !isEntering && roomId.isNotBlank(),
+                enabled = !homeVM.isEntering && homeVM.roomId.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                if (isEntering) {
+                if (homeVM.isEntering) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         color = MaterialTheme.colorScheme.onPrimary,

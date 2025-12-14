@@ -1,4 +1,4 @@
-package io.github.hcisme.mediasoupclient.pages.room
+package io.github.hcisme.mediasoupclient.ui.pages.room
 
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,9 +19,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.VideoTile
 import io.github.hcisme.mediasoupclient.model.RemoteStreamState
-import io.github.hcisme.mediasoupclient.utils.parseRemoteState
 import org.webrtc.VideoTrack
 import kotlin.math.roundToInt
 
@@ -35,6 +35,7 @@ fun OneOnOneLayout(
     remoteStates: Map<String, RemoteStreamState>
 ) {
     val density = LocalDensity.current
+    val roomVM = viewModel<RoomViewModel>()
     // false: 远端是大屏，本地是小窗
     var isLocalMain by remember { mutableStateOf(false) }
     val remoteEntry = remoteVideoTracksMap.entries.first()
@@ -42,7 +43,7 @@ fun OneOnOneLayout(
     val remoteTrack = remoteEntry.value
 
     // 解析远端状态
-    val (remoteName, isRemoteMicMuted, isRemoteCameraOff, score) = parseRemoteState(
+    val (remoteName, isRemoteMicMuted, isRemoteCameraOff, score) = roomVM.parseRemoteState(
         remoteProducerId,
         remoteStates
     )

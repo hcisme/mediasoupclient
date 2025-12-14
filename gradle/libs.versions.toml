@@ -15,6 +15,7 @@ libmediasoupAndroid = "0.21.0"
 libwebrtcKtx = "1.12.0"
 navigationCompose = "2.9.6"
 socketIoClient = "2.1.0"
+accompanistPermissions = "0.37.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,6 +35,7 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
 kotlinx-serialization-json-jvm = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm", version.ref = "kotlinxSerializationJsonJvm" }
 libmediasoup-android = { module = "io.github.crow-misia.libmediasoup-android:libmediasoup-android", version.ref = "libmediasoupAndroid" }
 libwebrtc-ktx = { module = "io.github.crow-misia.libwebrtc:libwebrtc-ktx", version.ref = "libwebrtcKtx" }

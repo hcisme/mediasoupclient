@@ -9,8 +9,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import io.github.hcisme.mediasoupclient.pages.home.HomePage
-import io.github.hcisme.mediasoupclient.pages.room.RoomPage
+import io.github.hcisme.mediasoupclient.ui.pages.home.HomePage
+import io.github.hcisme.mediasoupclient.ui.pages.room.RoomPage
 import io.github.hcisme.mediasoupclient.ui.theme.MediaSoupClientTheme
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
 
@@ -46,7 +46,7 @@ fun AppNav() {
                 dynamicColor = false,
                 darkTheme = true
             ) {
-                RoomPage(roomId = roomId, isOpenCamera = isOpenCamera, isOpenMic = isOpenMic)
+                RoomPage(roomId = roomId, initOpenCamera = isOpenCamera, initOpenMic = isOpenMic)
             }
         }
     }

@@ -35,8 +35,8 @@ data class ConsumeResponse(
 @Serializable
 data class ExistingProducer(
     val producerId: String,
-    val kind: String? = null,
-    val paused: Boolean? = null,
+    val kind: String,
+    val paused: Boolean,
     val socketId: String,
 )
 
@@ -66,4 +66,11 @@ data class NewProducerResponse(
     val socketId: String,
     val kind: String,
     val paused: Boolean,
+)
+
+@Serializable
+data class RemotePauseResumeDataResponse(
+    val producerId: String,
+    val kind: String,
+    val socketId: String
 )

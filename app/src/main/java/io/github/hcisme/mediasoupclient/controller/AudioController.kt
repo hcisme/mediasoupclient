@@ -40,7 +40,8 @@ class AudioController(
      */
     fun createLocalAudioTrack(): AudioTrack? {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             Log.e(TAG, "createLocalAudioTrack() failed: No RECORD_AUDIO permission")
             return null
         }
@@ -83,12 +84,13 @@ class AudioController(
     private fun disposeWebRTC() {
         try {
             audioTrack?.dispose()
-            audioTrack = null
             audioSource?.dispose()
-            audioSource = null
             Log.d(TAG, "WebRTC audio resources disposed")
         } catch (e: Exception) {
             Log.e(TAG, "Error disposing WebRTC audio", e)
+        } finally {
+            audioTrack = null
+            audioSource = null
         }
     }
 

@@ -1,4 +1,4 @@
-package io.github.hcisme.mediasoupclient.pages.room
+package io.github.hcisme.mediasoupclient.ui.pages.room
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -18,14 +18,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.Dialog
 import io.github.hcisme.mediasoupclient.components.VideoTile
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
@@ -35,10 +34,13 @@ import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 @Composable
 fun RoomPage(
     roomId: String,
-    isOpenCamera: Boolean,
-    isOpenMic: Boolean
+    initOpenCamera: Boolean,
+    initOpenMic: Boolean
 ) {
     val view = LocalView.current
+    val roomClient = LocalRoomClient.current
+    val navHostController = LocalNavController.current
+    val roomVM = viewModel<RoomViewModel>()
     val insetsController = remember(view) {
         if (!view.isInEditMode) {
             val window = (view.context as Activity).window
@@ -47,9 +49,6 @@ fun RoomPage(
             null
         }
     }
-    val roomClient = LocalRoomClient.current
-    val navHostController = LocalNavController.current
-    var backDialogVisible by remember { mutableStateOf(false) }
 
     val roomId by roomClient.currentRoomId.collectAsState()
     val localState by roomClient.localState.collectAsState()
@@ -80,10 +79,10 @@ fun RoomPage(
 
     LaunchedEffect(Unit) {
         roomClient.audioController.setSpeakerphoneOn(true)
-        roomClient.startLocalMedia(isOpenCamera = isOpenCamera, isOpenMic = isOpenMic)
+        roomClient.startLocalMedia(isOpenCamera = initOpenCamera, isOpenMic = initOpenMic)
     }
 
-    BackHandler { backDialogVisible = true }
+    BackHandler { roomVM.backDialogVisible = true }
 
     Column(
         modifier = Modifier
@@ -141,27 +140,29 @@ fun RoomPage(
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 20.dp, vertical = 12.dp)
                     .padding(bottom = 16.dp),
+                initOpenMic = initOpenMic,
+                initOpenCamera = initOpenCamera,
                 isMicMuted = localState.isMicMuted,
                 isCameraOff = localState.isCameraOff,
                 onToggleMic = { roomClient.toggleMic() },
                 onToggleCamera = { roomClient.toggleCamera() },
                 onSwitchCamera = { roomClient.videoController.switchCamera() },
                 onHangUp = {
-                    backDialogVisible = true
+                    roomVM.backDialogVisible = true
                 }
             )
         }
     }
 
     Dialog(
-        visible = backDialogVisible,
+        visible = roomVM.backDialogVisible,
         confirmButtonText = "确定",
         cancelButtonText = "取消",
         onConfirm = {
-            backDialogVisible = false
+            roomVM.backDialogVisible = false
             navHostController.popBackStack()
         },
-        onDismissRequest = { backDialogVisible = false }
+        onDismissRequest = { roomVM.backDialogVisible = false }
     ) {
         Text("确认退出房间吗")
     }

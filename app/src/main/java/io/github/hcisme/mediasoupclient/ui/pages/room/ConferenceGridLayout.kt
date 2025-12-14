@@ -1,4 +1,4 @@
-package io.github.hcisme.mediasoupclient.pages.room
+package io.github.hcisme.mediasoupclient.ui.pages.room
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,9 +10,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.VideoTile
 import io.github.hcisme.mediasoupclient.model.RemoteStreamState
-import io.github.hcisme.mediasoupclient.utils.parseRemoteState
 import org.webrtc.VideoTrack
 
 @Composable
@@ -24,6 +24,8 @@ fun ConferenceGridLayout(
     remoteVideoTracksMap: Map<String, VideoTrack>,
     remoteStates: Map<String, RemoteStreamState>
 ) {
+    val roomVM = viewModel<RoomViewModel>()
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
@@ -47,7 +49,7 @@ fun ConferenceGridLayout(
 
         // 远端用户
         items(remoteVideoTracksMap.entries.toList()) { (producerId, track) ->
-            val (name, isMicMuted, isCameraOff, score) = parseRemoteState(
+            val (name, isMicMuted, isCameraOff, score) = roomVM.parseRemoteState(
                 producerId,
                 remoteStates
             )

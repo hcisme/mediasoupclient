@@ -6,6 +6,7 @@ package io.github.hcisme.mediasoupclient.utils
 object SocketEvent {
     const val CONNECT = io.socket.client.Socket.EVENT_CONNECT
     const val DISCONNECT = io.socket.client.Socket.EVENT_DISCONNECT
+    const val PEER_JOINED = "peerJoined"
     const val NEW_PRODUCER = "newProducer"
     const val CONSUMER_CLOSED = "consumerClosed"
     const val JOIN_ROOM = "joinRoom"
@@ -38,6 +39,7 @@ object JsonKey {
     const val APP_DATA = "appData"
     const val PAUSED = "paused"
     const val SOCKET_ID = "socketId"
+    const val SCORE = "score"
 }
 
 /**
