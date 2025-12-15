@@ -8,6 +8,7 @@ import io.github.hcisme.mediasoupclient.controller.AudioController
 import io.github.hcisme.mediasoupclient.controller.VideoController
 import io.github.hcisme.mediasoupclient.model.ConsumeResponse
 import io.github.hcisme.mediasoupclient.model.JoinResponse
+import io.github.hcisme.mediasoupclient.model.NewProducerResponse
 import io.github.hcisme.mediasoupclient.model.ProduceResponse
 import io.github.hcisme.mediasoupclient.model.RemoteStreamState
 import io.github.hcisme.mediasoupclient.model.TransportInfo
@@ -41,14 +42,12 @@ class RoomClient(private val context: Context) {
         val eglBaseContext: EglBase.Context by lazy { EglBase.create().eglBaseContext }
     }
 
-    // 协程、锁
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val recvTransportMutex = Mutex()
 
     // 状态标志
     private var isJoiningOrJoined = false
 
-    // === 三层架构核心组件 ===
     private val signaling = SignalingClient(serverUrl = SERVER_URL)
     private val mediaSoup = MediaSoupManager(context = context, eglBaseContext = eglBaseContext)
 
@@ -60,8 +59,14 @@ class RoomClient(private val context: Context) {
     private val _currentRoomId = MutableStateFlow<String?>(null)
     val currentRoomId = _currentRoomId.asStateFlow()
 
+    // 本地状态
     private val _localState = MutableStateFlow(LocalMediaState())
     val localState = _localState.asStateFlow()
+
+    // 远程状态
+    // key 是 socketId
+    private val _remotePeers = MutableStateFlow<Map<String, RemotePeer>>(emptyMap())
+    val remotePeers = _remotePeers.asStateFlow()
 
     private val _remoteVideoTracks = MutableStateFlow<Map<String, VideoTrack>>(emptyMap())
     val remoteVideoTracks = _remoteVideoTracks.asStateFlow()
@@ -139,18 +144,13 @@ class RoomClient(private val context: Context) {
                 Log.d(TAG, "Socket disconnected")
                 isJoiningOrJoined = false
             },
-            onPeerJoined = {},
-            onNewProducer = { data ->
-                _remoteStreamStates.update { state ->
-                    state + (data.producerId to RemoteStreamState(
-                        producerId = data.producerId,
-                        kind = data.kind,
-                        isPaused = data.paused,
-                        socketId = data.socketId
-                    ))
+            onPeerJoined = { socketId ->
+                _remotePeers.update { current ->
+                    if (current.containsKey(socketId)) current
+                    else current + (socketId to RemotePeer(socketId))
                 }
-                scope.launch { consumeStream(data.producerId) }
             },
+            onNewProducer = { handleNewProducer(it) },
             onConsumerClosed = { consumerId ->
                 handleConsumerClosed(consumerId)
             },
@@ -204,6 +204,16 @@ class RoomClient(private val context: Context) {
 
         // 处理已经在房间的用户
         joinResponse.existingProducers.forEach { producer ->
+            _remotePeers.update { current ->
+                val peer = current[producer.socketId] ?: RemotePeer(socketId = producer.socketId)
+                val newPeer = if (producer.kind == MediaType.VIDEO) {
+                    peer.copy(videoProducerId = producer.producerId)
+                } else {
+                    peer.copy(audioProducerId = producer.producerId)
+                }
+                current + (producer.socketId to newPeer)
+            }
+
             _remoteStreamStates.update { current ->
                 current + (producer.producerId to RemoteStreamState(
                     producerId = producer.producerId,
@@ -213,11 +223,64 @@ class RoomClient(private val context: Context) {
                 ))
             }
             // 忽略旧流消费失败，不影响进房
-            runCatching { consumeStream(producer.producerId) }
+            runCatching {
+                consumeStream(producer.producerId) {
+                    _remotePeers.update { current ->
+                        val peer =
+                            current[producer.socketId] ?: RemotePeer(socketId = producer.socketId)
+                        val newPeer = if (producer.kind == MediaType.VIDEO) {
+                            peer.copy(hasVideoStream = true)
+                        } else {
+                            peer.copy(hasMicStream = true)
+                        }
+                        current + (producer.socketId to newPeer)
+                    }
+                }
+            }
         }
     }
 
-    private suspend fun consumeStream(producerId: String) {
+    private fun handleNewProducer(data: NewProducerResponse) {
+        _remotePeers.update { current ->
+            val peer = current[data.socketId] ?: RemotePeer(socketId = data.socketId)
+            val newPeer = if (data.kind == MediaType.VIDEO) {
+                peer.copy(videoProducerId = data.producerId)
+            } else {
+                peer.copy(audioProducerId = data.producerId)
+            }
+            current + (data.socketId to newPeer)
+        }
+
+        _remoteStreamStates.update { state ->
+            state + (data.producerId to RemoteStreamState(
+                producerId = data.producerId,
+                kind = data.kind,
+                isPaused = data.paused,
+                socketId = data.socketId
+            ))
+        }
+
+        // 消费流
+        scope.launch {
+            consumeStream(data.producerId) {
+                _remotePeers.update { current ->
+                    val peer =
+                        current[data.socketId] ?: RemotePeer(socketId = data.socketId)
+                    val newPeer = if (data.kind == MediaType.VIDEO) {
+                        peer.copy(hasVideoStream = true)
+                    } else {
+                        peer.copy(hasMicStream = true)
+                    }
+                    current + (data.socketId to newPeer)
+                }
+            }
+        }
+    }
+
+    /**
+     * 消费流
+     */
+    private suspend fun consumeStream(producerId: String, onSuccess: () -> Unit = {}) {
         recvTransportMutex.withLock {
             withContext(Dispatchers.IO) {
                 val data = JSONObject().apply {
@@ -267,6 +330,7 @@ class RoomClient(private val context: Context) {
                         SocketEvent.RESUME,
                         JSONObject().put(JsonKey.CONSUMER_ID, res.id)
                     )
+                    onSuccess()
                 } catch (e: Exception) {
                     Log.e(TAG, "Consume failed", e)
                 }
@@ -277,11 +341,18 @@ class RoomClient(private val context: Context) {
     private fun handleConsumerClosed(consumerId: String) {
         val producerId = consumerIdToProducerId[consumerId] ?: return
 
+        val remoteStreamSocketId = _remoteStreamStates.value.values.find {
+            it.producerId == producerId
+        }?.socketId
+        remoteStreamSocketId?.let { deleteSocketId -> _remotePeers.update { current -> current - deleteSocketId } }
+
         remoteAudioTracks[producerId].safeDispose()
         remoteAudioTracks.remove(producerId)
 
         _remoteVideoTracks.value[producerId].safeDispose()
         _remoteVideoTracks.update { it - producerId }
+
+        _remoteStreamStates.update { it - producerId }
 
         consumerIdToProducerId.remove(consumerId)
         Log.d(TAG, "Remote track removed: producerId=$producerId, consumerId=$consumerId")
@@ -440,6 +511,7 @@ class RoomClient(private val context: Context) {
             remoteAudioTracks.clear()
             consumerIdToProducerId.clear()
             _remoteStreamStates.value = emptyMap()
+            _remotePeers.value = emptyMap()
         }
     }
 
@@ -463,5 +535,13 @@ class RoomClient(private val context: Context) {
         val isFrontCamera: Boolean = true,
         val isMicMuted: Boolean = false,
         val videoTrack: VideoTrack? = null
+    )
+
+    data class RemotePeer(
+        val socketId: String,
+        val videoProducerId: String? = null,
+        val audioProducerId: String? = null,
+        val hasVideoStream: Boolean = false,
+        val hasMicStream: Boolean = false,
     )
 }

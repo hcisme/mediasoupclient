@@ -40,7 +40,7 @@ fun ControlBottomBar(
     isCameraOff: Boolean,
     onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
-    onSwitchCamera: () -> Unit,
+    onFlipCamera: () -> Unit,
     onHangUp: () -> Unit
 ) {
     val context = LocalContext.current
@@ -107,7 +107,7 @@ fun ControlBottomBar(
 
         // 切换摄像头前后的按钮
         IconButton(
-            onClick = onSwitchCamera,
+            onClick = onFlipCamera,
             modifier = Modifier
                 .size(56.dp)
                 .background(Color.White, CircleShape)

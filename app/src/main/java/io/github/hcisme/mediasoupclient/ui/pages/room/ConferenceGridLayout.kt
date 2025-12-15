@@ -8,23 +8,25 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.VideoTile
-import io.github.hcisme.mediasoupclient.model.RemoteStreamState
+import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 import org.webrtc.VideoTrack
 
 @Composable
-fun ConferenceGridLayout(
-    localTrack: VideoTrack?,
-    isLocalCameraOff: Boolean,
-    isLocalMicMuted: Boolean,
-    isFrontCamera: Boolean = false,
-    remoteVideoTracksMap: Map<String, VideoTrack>,
-    remoteStates: Map<String, RemoteStreamState>
-) {
+fun ConferenceGridLayout() {
+    val roomClient = LocalRoomClient.current
     val roomVM = viewModel<RoomViewModel>()
+    // 本地
+    val localState by roomClient.localState.collectAsState()
+    // 远程
+    val remotePeersMap by roomClient.remotePeers.collectAsState()
+    val remoteVideoTracksMap by roomClient.remoteVideoTracks.collectAsState()
+    val remoteStates by roomClient.remoteStreamStates.collectAsState()
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -37,31 +39,36 @@ fun ConferenceGridLayout(
         item {
             GridVideoItem(
                 modifier = Modifier.aspectRatio(1f),
-                track = localTrack,
-                isCameraOff = isLocalCameraOff,
-                isMicMuted = isLocalMicMuted,
+                track = localState.videoTrack,
+                isCameraOff = localState.isCameraOff,
+                isMicMuted = localState.isMicMuted,
                 isLocal = true,
-                isFrontCamera = isFrontCamera,
+                isFrontCamera = localState.isFrontCamera,
                 networkScore = 10,
                 label = "Me"
             )
         }
 
         // 远端用户
-        items(remoteVideoTracksMap.entries.toList()) { (producerId, track) ->
-            val (name, isMicMuted, isCameraOff, score) = roomVM.parseRemoteState(
-                producerId,
-                remoteStates
-            )
+        items(remotePeersMap.entries.toList()) { (socketId, remotePeer) ->
+            val videoId = remotePeer.videoProducerId
+            val audioId = remotePeer.audioProducerId
+            val videoState = if (videoId != null) remoteStates[videoId] else null
+            val audioState = if (audioId != null) remoteStates[audioId] else null
+
+            val isCameraOff = videoId == null || (videoState?.isPaused == true)
+            val isMicMuted = audioId == null || (audioState?.isPaused == true)
+
+            val score = videoState?.score ?: 10
 
             GridVideoItem(
                 modifier = Modifier.aspectRatio(1f),
-                track = track,
+                track = if (videoId != null) remoteVideoTracksMap[videoId] else null,
                 isCameraOff = isCameraOff,
                 isMicMuted = isMicMuted,
                 isLocal = false,
                 networkScore = score,
-                label = name
+                label = "User ${socketId.takeLast(4)}"
             )
         }
     }

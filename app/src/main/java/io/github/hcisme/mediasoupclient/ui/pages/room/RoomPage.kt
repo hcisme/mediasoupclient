@@ -53,10 +53,8 @@ fun RoomPage(
     val roomId by roomClient.currentRoomId.collectAsState()
     val localState by roomClient.localState.collectAsState()
 
-    // 远程视频轨道 Map <ProducerId, VideoTrack>
-    val remoteVideoTracksMap by roomClient.remoteVideoTracks.collectAsState()
-    // 远程状态 Map <ProducerId, RemoteStreamState>
-    val remoteStates by roomClient.remoteStreamStates.collectAsState()
+    // 远程
+    val remotePeersMap by roomClient.remotePeers.collectAsState()
 
     LaunchedEffect(Unit) {
         insetsController?.apply {
@@ -98,7 +96,7 @@ fun RoomPage(
                 .weight(1f)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            when (remoteVideoTracksMap.size) {
+            when (remotePeersMap.size) {
                 0 -> {
                     VideoTile(
                         modifier = Modifier.fillMaxSize(),
@@ -112,27 +110,7 @@ fun RoomPage(
                     )
                 }
 
-                1 -> {
-                    OneOnOneLayout(
-                        localTrack = localState.videoTrack,
-                        isLocalCameraOff = localState.isCameraOff,
-                        isLocalMicMuted = localState.isMicMuted,
-                        isFrontCamera = localState.isFrontCamera,
-                        remoteVideoTracksMap = remoteVideoTracksMap,
-                        remoteStates = remoteStates
-                    )
-                }
-
-                else -> {
-                    ConferenceGridLayout(
-                        localTrack = localState.videoTrack,
-                        isLocalCameraOff = localState.isCameraOff,
-                        isLocalMicMuted = localState.isMicMuted,
-                        isFrontCamera = localState.isFrontCamera,
-                        remoteVideoTracksMap = remoteVideoTracksMap,
-                        remoteStates = remoteStates
-                    )
-                }
+                else -> ConferenceGridLayout()
             }
 
             ControlBottomBar(
@@ -146,7 +124,7 @@ fun RoomPage(
                 isCameraOff = localState.isCameraOff,
                 onToggleMic = { roomClient.toggleMic() },
                 onToggleCamera = { roomClient.toggleCamera() },
-                onSwitchCamera = { roomClient.videoController.switchCamera() },
+                onFlipCamera = { roomClient.videoController.switchCamera() },
                 onHangUp = {
                     roomVM.backDialogVisible = true
                 }
