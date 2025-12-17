@@ -121,6 +121,11 @@ class AudioController(
         // 默认开启扬声器 (视频会议通常默认扬声器)
         setSpeakerphoneOn(true)
 
+        // 确保麦克风没被系统静音
+        if (audioManager.isMicrophoneMute) {
+            audioManager.isMicrophoneMute = false
+        }
+
         Log.d(TAG, "Audio system initialized in communication mode")
     }
 

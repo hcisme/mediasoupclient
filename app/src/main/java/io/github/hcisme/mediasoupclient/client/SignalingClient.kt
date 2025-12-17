@@ -30,6 +30,7 @@ class SignalingClient(private val serverUrl: String) {
      * @param onConnect 连接成功回调
      * @param onDisconnect 断开连接回调
      * @param onPeerJoined 有人加入的回调
+     * @param onPeerLeave 有人断开连接的回调
      * @param onNewProducer 有新人发布流回调 (data)
      * @param onConsumerClosed 有人停止消费回调 (consumerId)
      * @param onProducerPaused 远程暂停回调 (producerId, kind, socketId)
@@ -40,6 +41,7 @@ class SignalingClient(private val serverUrl: String) {
         onConnect: () -> Unit,
         onDisconnect: () -> Unit,
         onPeerJoined: (String) -> Unit,
+        onPeerLeave: (String) -> Unit,
         onNewProducer: (data: NewProducerResponse) -> Unit,
         onConsumerClosed: (consumerId: String) -> Unit,
         onProducerPaused: (data: RemotePauseResumeDataResponse) -> Unit,
@@ -49,12 +51,11 @@ class SignalingClient(private val serverUrl: String) {
         socket = IO.socket(serverUrl).apply {
             // 基础连接事件
             on(SocketEvent.CONNECT) { onConnect() }
-            on(SocketEvent.DISCONNECT) { onDisconnect() }
 
             // 业务事件监听
             on(SocketEvent.PEER_JOINED) { args ->
                 val data = args.firstOrNull() as? JSONObject
-                val socketId = data?.optString("socketId")
+                val socketId = data?.optString(JsonKey.SOCKET_ID)
                 socketId?.let { onPeerJoined(it) }
             }
 
@@ -89,6 +90,14 @@ class SignalingClient(private val serverUrl: String) {
                     val scoreVal = scores.getJSONObject(0).optInt(JsonKey.SCORE, 0)
                     onProducerScore(producerId, scoreVal)
                 }
+            }
+
+            on(SocketEvent.DISCONNECT) { onDisconnect() }
+
+            on(SocketEvent.PEER_LEAVE) { args ->
+                val data = args.firstOrNull() as? JSONObject ?: return@on
+                val socketId = data.optString(JsonKey.SOCKET_ID)
+                onPeerLeave(socketId)
             }
         }
         socket?.connect()

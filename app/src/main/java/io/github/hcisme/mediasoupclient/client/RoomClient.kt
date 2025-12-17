@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import io.github.crow_misia.mediasoup.Consumer
 import io.github.crow_misia.mediasoup.Producer
+import io.github.hcisme.mediasoupclient.BuildConfig
 import io.github.hcisme.mediasoupclient.controller.AudioController
 import io.github.hcisme.mediasoupclient.controller.VideoController
 import io.github.hcisme.mediasoupclient.model.ConsumeResponse
@@ -17,6 +18,7 @@ import io.github.hcisme.mediasoupclient.utils.MediaType
 import io.github.hcisme.mediasoupclient.utils.SocketEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,22 +41,29 @@ import java.util.concurrent.ConcurrentHashMap
 class RoomClient(private val context: Context) {
     companion object {
         private const val TAG = "RoomClient"
-        private const val SERVER_URL = "http://192.168.2.5:3000"
+        private const val SERVER_URL = BuildConfig.BASE_URL
         val eglBaseContext: EglBase.Context by lazy { EglBase.create().eglBaseContext }
     }
 
+    private val appContext = context.applicationContext
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var roomSessionJob: Job? = null
     private val recvTransportMutex = Mutex()
-
-    // 状态标志
     private var isJoiningOrJoined = false
 
     private val signaling = SignalingClient(serverUrl = SERVER_URL)
-    private val mediaSoup = MediaSoupManager(context = context, eglBaseContext = eglBaseContext)
+    private val mediaSoup = MediaSoupManager(context = appContext, eglBaseContext = eglBaseContext)
 
     // 音视频控制器
-    val videoController = VideoController(context, mediaSoup.peerConnectionFactory, eglBaseContext)
-    val audioController = AudioController(context, mediaSoup.peerConnectionFactory)
+    val videoController = VideoController(
+        context = appContext,
+        factory = mediaSoup.peerConnectionFactory,
+        eglContext = eglBaseContext
+    )
+    val audioController = AudioController(
+        context = appContext,
+        factory = mediaSoup.peerConnectionFactory
+    )
 
     // 状态流
     private val _currentRoomId = MutableStateFlow<String?>(null)
@@ -68,9 +78,6 @@ class RoomClient(private val context: Context) {
     private val _remotePeers = MutableStateFlow<Map<String, RemotePeer>>(emptyMap())
     val remotePeers = _remotePeers.asStateFlow()
 
-    private val _remoteVideoTracks = MutableStateFlow<Map<String, VideoTrack>>(emptyMap())
-    val remoteVideoTracks = _remoteVideoTracks.asStateFlow()
-
     private val _remoteStreamStates = MutableStateFlow<Map<String, RemoteStreamState>>(emptyMap())
     val remoteStreamStates = _remoteStreamStates.asStateFlow()
 
@@ -84,9 +91,11 @@ class RoomClient(private val context: Context) {
 
     init {
         initMediaSoupCallbacks()
-        observeLocalControllers()
     }
 
+    /**
+     * 初始化 MediaSoup 类里的回调
+     */
     private fun initMediaSoupCallbacks() {
         mediaSoup.onConnectTransport = { id, dtls ->
             val data = JSONObject().apply {
@@ -109,21 +118,13 @@ class RoomClient(private val context: Context) {
         }
     }
 
-    private fun observeLocalControllers() {
-        scope.launch {
-            videoController.localVideoTrackFlow.collect { track ->
-                _localState.update { it.copy(videoTrack = track) }
-            }
-        }
-        scope.launch {
-            videoController.isFrontCamera.collect { isFront ->
-                _localState.update { it.copy(isFrontCamera = isFront) }
-            }
-        }
-    }
-
+    /**
+     * 连接到房间
+     */
     fun connectToRoom(roomId: String, onSuccess: () -> Unit = {}, onError: () -> Unit = {}) {
         _currentRoomId.update { roomId }
+
+        observeLocalControllers()
 
         signaling.connect(
             onConnect = {
@@ -162,10 +163,36 @@ class RoomClient(private val context: Context) {
             },
             onProducerScore = { producerId, score ->
                 updateRemoteState(producerId) { it.copy(score = score) }
+            },
+            onPeerLeave = { socketId ->
+                handlePeerLeave(socketId = socketId)
             }
         )
     }
 
+    /**
+     * videoController 状态观察
+     */
+    private fun observeLocalControllers() {
+        roomSessionJob?.cancel()
+        roomSessionJob = SupervisorJob()
+
+        val sessionScope = scope + roomSessionJob!!
+        sessionScope.launch {
+            videoController.localVideoTrackFlow.collect { track ->
+                _localState.update { it.copy(videoTrack = track) }
+            }
+        }
+        sessionScope.launch {
+            videoController.isFrontCamera.collect { isFront ->
+                _localState.update { it.copy(isFrontCamera = isFront) }
+            }
+        }
+    }
+
+    /**
+     * 加入房间
+     */
     private suspend fun joinRoom(roomId: String) = coroutineScope {
         val joinResponse = signaling.suspendSafeEmit<JoinResponse>(
             SocketEvent.JOIN_ROOM,
@@ -223,23 +250,13 @@ class RoomClient(private val context: Context) {
                 ))
             }
             // 忽略旧流消费失败，不影响进房
-            runCatching {
-                consumeStream(producer.producerId) {
-                    _remotePeers.update { current ->
-                        val peer =
-                            current[producer.socketId] ?: RemotePeer(socketId = producer.socketId)
-                        val newPeer = if (producer.kind == MediaType.VIDEO) {
-                            peer.copy(hasVideoStream = true)
-                        } else {
-                            peer.copy(hasMicStream = true)
-                        }
-                        current + (producer.socketId to newPeer)
-                    }
-                }
-            }
+            runCatching { consumeStream(producer.producerId) }
         }
     }
 
+    /**
+     * 有新人发布流
+     */
     private fun handleNewProducer(data: NewProducerResponse) {
         _remotePeers.update { current ->
             val peer = current[data.socketId] ?: RemotePeer(socketId = data.socketId)
@@ -261,20 +278,7 @@ class RoomClient(private val context: Context) {
         }
 
         // 消费流
-        scope.launch {
-            consumeStream(data.producerId) {
-                _remotePeers.update { current ->
-                    val peer =
-                        current[data.socketId] ?: RemotePeer(socketId = data.socketId)
-                    val newPeer = if (data.kind == MediaType.VIDEO) {
-                        peer.copy(hasVideoStream = true)
-                    } else {
-                        peer.copy(hasMicStream = true)
-                    }
-                    current + (data.socketId to newPeer)
-                }
-            }
-        }
+        scope.launch { consumeStream(data.producerId) }
     }
 
     /**
@@ -282,17 +286,23 @@ class RoomClient(private val context: Context) {
      */
     private suspend fun consumeStream(producerId: String, onSuccess: () -> Unit = {}) {
         recvTransportMutex.withLock {
+            val transport = mediaSoup.recvTransport
+            if (transport == null) {
+                Log.w(TAG, "RecvTransport is null, cannot consume")
+                return
+            }
+
             withContext(Dispatchers.IO) {
                 val data = JSONObject().apply {
                     put(JsonKey.PRODUCER_ID, producerId)
-                    put(JsonKey.TRANSPORT_ID, mediaSoup.recvTransport!!.id)
+                    put(JsonKey.TRANSPORT_ID, transport.id)
                     put(JsonKey.RTP_CAPABILITIES, JSONObject(mediaSoup.getRtpCapabilities()))
                 }
 
                 try {
                     val res = signaling.suspendSafeEmit<ConsumeResponse>(SocketEvent.CONSUME, data)
 
-                    val consumer = mediaSoup.recvTransport?.consume(
+                    val consumer = transport.consume(
                         listener = object : Consumer.Listener {
                             override fun onTransportClose(consumer: Consumer) {
                                 Log.d(
@@ -311,17 +321,15 @@ class RoomClient(private val context: Context) {
 
                     when (res.kind) {
                         MediaType.VIDEO -> {
-                            (consumer?.track as? VideoTrack)?.let { track ->
-                                track.setEnabled(true)
-                                _remoteVideoTracks.update { it + (res.producerId to track) }
-                            }
+                            val track = consumer.track as VideoTrack
+                            track.setEnabled(true)
+                            updateRemoteState(producerId = res.producerId) { it.copy(videoTrack = track) }
                         }
 
                         MediaType.AUDIO -> {
-                            (consumer?.track as? AudioTrack)?.let { track ->
-                                track.setEnabled(true)
-                                remoteAudioTracks[res.producerId] = track
-                            }
+                            val track = consumer.track as AudioTrack
+                            track.setEnabled(true)
+                            remoteAudioTracks[res.producerId] = track
                         }
                     }
 
@@ -338,26 +346,32 @@ class RoomClient(private val context: Context) {
         }
     }
 
+    /**
+     * 消费的人关闭流了
+     */
     private fun handleConsumerClosed(consumerId: String) {
         val producerId = consumerIdToProducerId[consumerId] ?: return
-
-        val remoteStreamSocketId = _remoteStreamStates.value.values.find {
-            it.producerId == producerId
-        }?.socketId
-        remoteStreamSocketId?.let { deleteSocketId -> _remotePeers.update { current -> current - deleteSocketId } }
 
         remoteAudioTracks[producerId].safeDispose()
         remoteAudioTracks.remove(producerId)
 
-        _remoteVideoTracks.value[producerId].safeDispose()
-        _remoteVideoTracks.update { it - producerId }
-
+        _remoteStreamStates.value[producerId]?.videoTrack.safeDispose()
         _remoteStreamStates.update { it - producerId }
 
         consumerIdToProducerId.remove(consumerId)
         Log.d(TAG, "Remote track removed: producerId=$producerId, consumerId=$consumerId")
     }
 
+    /**
+     * 有人离开
+     */
+    private fun handlePeerLeave(socketId: String) {
+        _remotePeers.update { current -> current - socketId }
+    }
+
+    /**
+     * 开启本地媒体 Camera / Mic
+     */
     fun startLocalMedia(isOpenCamera: Boolean, isOpenMic: Boolean) {
         _localState.update { it.copy(isCameraOff = !isOpenCamera, isMicMuted = !isOpenMic) }
 
@@ -365,7 +379,7 @@ class RoomClient(private val context: Context) {
             videoController.start()
             val track = videoController.localVideoTrackFlow.value
             if (track != null && mediaSoup.sendTransport != null) {
-                localVideoProducer = mediaSoup.sendTransport?.produce(
+                localVideoProducer = mediaSoup.sendTransport!!.produce(
                     listener = producerListener(MediaType.VIDEO),
                     track = track
                 )
@@ -388,16 +402,19 @@ class RoomClient(private val context: Context) {
                 localAudioProducer!!.pause()
                 signaling.emit(
                     SocketEvent.PAUSE_PRODUCER,
-                    JSONObject().put("producerId", localAudioProducer!!.id)
+                    JSONObject().put(JsonKey.PRODUCER_ID, localAudioProducer!!.id)
                 )
-                audioController.setMicMuted(true)
             }
+            audioController.setMicMuted(!isOpenMic)
         } else {
             Log.w(TAG, "Audio start failed")
             _localState.update { it.copy(isMicMuted = true) }
         }
     }
 
+    /**
+     * 开关 Camera
+     */
     fun toggleCamera() {
         val newOff = !_localState.value.isCameraOff
 
@@ -445,6 +462,9 @@ class RoomClient(private val context: Context) {
         }
     }
 
+    /**
+     * 开关 Mic
+     */
     fun toggleMic() {
         // 重试逻辑
         if (localAudioProducer == null) {
@@ -485,6 +505,9 @@ class RoomClient(private val context: Context) {
         }
     }
 
+    /**
+     * 退出房间
+     */
     fun exitRoom() {
         try {
             isJoiningOrJoined = false
@@ -495,23 +518,27 @@ class RoomClient(private val context: Context) {
             localVideoProducer?.close()
             localAudioProducer?.close()
 
-            mediaSoup.dispose()
+            roomSessionJob?.cancel()
+
             videoController.dispose()
             audioController.dispose()
 
-            _remoteVideoTracks.value.forEach { (_, t) -> t.dispose() }
-            remoteAudioTracks.values.forEach { it.dispose() }
+            mediaSoup.dispose()
+
+            _remoteStreamStates.value.forEach { (_, t) -> t.videoTrack.safeDispose() }
+            remoteAudioTracks.values.forEach { it.safeDispose() }
             Log.d(TAG, "Exit Room Success")
         } catch (e: Exception) {
             Log.e(TAG, "Exit Room Exception", e)
         } finally {
             localVideoProducer = null
             localAudioProducer = null
-            _remoteVideoTracks.value = emptyMap()
+            roomSessionJob = null
             remoteAudioTracks.clear()
             consumerIdToProducerId.clear()
             _remoteStreamStates.value = emptyMap()
             _remotePeers.value = emptyMap()
+            _localState.update { LocalMediaState() }
         }
     }
 
@@ -540,8 +567,6 @@ class RoomClient(private val context: Context) {
     data class RemotePeer(
         val socketId: String,
         val videoProducerId: String? = null,
-        val audioProducerId: String? = null,
-        val hasVideoStream: Boolean = false,
-        val hasMicStream: Boolean = false,
+        val audioProducerId: String? = null
     )
 }

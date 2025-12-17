@@ -7,6 +7,7 @@ object SocketEvent {
     const val CONNECT = io.socket.client.Socket.EVENT_CONNECT
     const val DISCONNECT = io.socket.client.Socket.EVENT_DISCONNECT
     const val PEER_JOINED = "peerJoined"
+    const val PEER_LEAVE = "peerLeave"
     const val NEW_PRODUCER = "newProducer"
     const val CONSUMER_CLOSED = "consumerClosed"
     const val JOIN_ROOM = "joinRoom"
@@ -56,7 +57,7 @@ object MediaType {
 object WebRTCConfig {
     const val VIDEO_TRACK_ID = "local_video"
     const val CAPTURE_THREAD_NAME = "Cap"
-    const val VIDEO_WIDTH = 640
-    const val VIDEO_HEIGHT = 480
-    const val VIDEO_FPS = 30
+    const val VIDEO_WIDTH = 320
+    const val VIDEO_HEIGHT = 240
+    const val VIDEO_FPS = 15
 }

@@ -1,8 +1,22 @@
+import java.util.Properties
+import kotlin.apply
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val debugBaseUrl: String by lazy {
+    localProperties.getProperty("debug.base.url", System.getenv("DEBUG_BASE_URL"))
+}
+val releaseBaseUrl: String by lazy {
+    localProperties.getProperty("release.base.url", System.getenv("RELEASE_BASE_URL"))
 }
 
 android {
@@ -22,7 +36,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BASE_URL", debugBaseUrl)
+        }
+
         release {
+            buildConfigField("String", "BASE_URL", releaseBaseUrl)
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -39,6 +58,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

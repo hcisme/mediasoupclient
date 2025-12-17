@@ -3,6 +3,7 @@ package io.github.hcisme.mediasoupclient.model
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import org.webrtc.VideoTrack
 
 /**
  * Socket.IO 返回的 Transport 信息
@@ -29,7 +30,8 @@ data class ConsumeResponse(
     val id: String,
     val producerId: String,
     val kind: String,
-    val rtpParameters: JsonObject
+    val rtpParameters: JsonObject,
+    val socketId: String
 )
 
 @Serializable
@@ -37,7 +39,7 @@ data class ExistingProducer(
     val producerId: String,
     val kind: String,
     val paused: Boolean,
-    val socketId: String,
+    val socketId: String
 )
 
 /**
@@ -57,7 +59,8 @@ data class RemoteStreamState(
     val kind: String,
     val isPaused: Boolean,
     val score: Int = 10,
-    val socketId: String
+    val socketId: String,
+    val videoTrack: VideoTrack? = null
 )
 
 @Serializable
@@ -65,7 +68,7 @@ data class NewProducerResponse(
     val producerId: String,
     val socketId: String,
     val kind: String,
-    val paused: Boolean,
+    val paused: Boolean
 )
 
 @Serializable

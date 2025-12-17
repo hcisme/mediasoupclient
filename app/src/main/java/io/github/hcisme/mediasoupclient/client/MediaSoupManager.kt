@@ -149,11 +149,16 @@ class MediaSoupManager(
      * 销毁资源
      */
     fun dispose() {
-        sendTransport?.dispose()
-        recvTransport?.dispose()
-        device?.dispose()
-        sendTransport = null
-        recvTransport = null
-        device = null
+        try {
+            sendTransport?.dispose()
+            recvTransport?.dispose()
+            device?.dispose()
+        } catch (e: Exception) {
+            Log.e(TAG, "Dispose $TAG error", e)
+        } finally {
+            sendTransport = null
+            recvTransport = null
+            device = null
+        }
     }
 }

@@ -107,6 +107,9 @@ class VideoController(
         }
     }
 
+    /**
+     * 创建 videoCapturer
+     */
     private fun createCameraCapturer(): VideoCapturer? {
         val enumerator = Camera2Enumerator(context)
         val deviceNames = enumerator.deviceNames
@@ -130,7 +133,7 @@ class VideoController(
     /**
      * 切换摄像头
      */
-    fun switchCamera() {
+    fun flipCamera() {
         if (isSwitching.get()) {
             Log.w(TAG, "Camera is already switching, ignoring request.")
             return
@@ -239,6 +242,8 @@ class VideoController(
 
             // 释放 EGL 上下文
             surfaceTextureHelper?.dispose()
+
+            Log.d(TAG, "Video resources disposed")
         } catch (e: Exception) {
             Log.e(TAG, "Error disposing video resources", e)
         } finally {

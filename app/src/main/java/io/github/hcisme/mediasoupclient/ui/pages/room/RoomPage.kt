@@ -84,8 +84,8 @@ fun RoomPage(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .fillMaxSize()
             .navigationBarsPadding()
     ) {
         TopAppBar(title = { roomId?.let { Text(text = it) } })
@@ -124,7 +124,7 @@ fun RoomPage(
                 isCameraOff = localState.isCameraOff,
                 onToggleMic = { roomClient.toggleMic() },
                 onToggleCamera = { roomClient.toggleCamera() },
-                onFlipCamera = { roomClient.videoController.switchCamera() },
+                onFlipCamera = { roomClient.videoController.flipCamera() },
                 onHangUp = {
                     roomVM.backDialogVisible = true
                 }

@@ -25,7 +25,6 @@ fun ConferenceGridLayout() {
     val localState by roomClient.localState.collectAsState()
     // 远程
     val remotePeersMap by roomClient.remotePeers.collectAsState()
-    val remoteVideoTracksMap by roomClient.remoteVideoTracks.collectAsState()
     val remoteStates by roomClient.remoteStreamStates.collectAsState()
 
     LazyVerticalGrid(
@@ -63,7 +62,7 @@ fun ConferenceGridLayout() {
 
             GridVideoItem(
                 modifier = Modifier.aspectRatio(1f),
-                track = if (videoId != null) remoteVideoTracksMap[videoId] else null,
+                track = videoState?.videoTrack,
                 isCameraOff = isCameraOff,
                 isMicMuted = isMicMuted,
                 isLocal = false,
