@@ -1,5 +1,9 @@
 package io.github.hcisme.mediasoupclient.ui.pages.home
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,11 +34,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,16 +49,27 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.R
 import io.github.hcisme.mediasoupclient.navigation.navigationToRoom
+import io.github.hcisme.mediasoupclient.service.CallServiceManager
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
 import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 
 @Composable
 fun HomePage() {
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val navHostController = LocalNavController.current
     val roomClient = LocalRoomClient.current
     val homeVM = viewModel<HomeViewModel>()
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {}
+    )
 
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -150,6 +167,7 @@ fun HomePage() {
                         roomId = homeVM.roomId,
                         onSuccess = {
                             homeVM.isEntering = false
+                            CallServiceManager.start(context = context)
                             navHostController.navigationToRoom(
                                 roomId = homeVM.roomId,
                                 cam = homeVM.isOpenCamera,

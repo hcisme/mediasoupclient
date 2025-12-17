@@ -134,10 +134,10 @@ class RoomClient(private val context: Context) {
                 scope.launch {
                     try {
                         joinRoom(roomId)
-                        onSuccess()
+                        withContext(Dispatchers.Main) { onSuccess() }
                     } catch (e: Exception) {
                         Log.e(TAG, "Join room failed", e)
-                        onError()
+                        withContext(Dispatchers.Main) { onError() }
                     }
                 }
             },
@@ -367,6 +367,11 @@ class RoomClient(private val context: Context) {
      */
     private fun handlePeerLeave(socketId: String) {
         _remotePeers.update { current -> current - socketId }
+
+        // 防止有残留
+        _remoteStreamStates.update { current ->
+            current.filterValues { it.socketId != socketId }
+        }
     }
 
     /**

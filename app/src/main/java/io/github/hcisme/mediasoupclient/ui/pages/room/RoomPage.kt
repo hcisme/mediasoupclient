@@ -21,12 +21,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.Dialog
+import io.github.hcisme.mediasoupclient.components.KeepScreenOn
 import io.github.hcisme.mediasoupclient.components.VideoTile
+import io.github.hcisme.mediasoupclient.service.CallServiceManager
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
 import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 
@@ -37,6 +40,7 @@ fun RoomPage(
     initOpenCamera: Boolean,
     initOpenMic: Boolean
 ) {
+    val context = LocalContext.current
     val view = LocalView.current
     val roomClient = LocalRoomClient.current
     val navHostController = LocalNavController.current
@@ -56,15 +60,14 @@ fun RoomPage(
     // 远程
     val remotePeersMap by roomClient.remotePeers.collectAsState()
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         insetsController?.apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
         }
-    }
 
-    DisposableEffect(Unit) {
         onDispose {
+            CallServiceManager.stop(context = context)
             insetsController?.apply {
                 isAppearanceLightStatusBars = true
                 isAppearanceLightNavigationBars = true
@@ -144,4 +147,6 @@ fun RoomPage(
     ) {
         Text("确认退出房间吗")
     }
+
+    KeepScreenOn()
 }
