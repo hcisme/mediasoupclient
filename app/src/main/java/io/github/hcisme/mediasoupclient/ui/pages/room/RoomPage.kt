@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,11 +18,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.hcisme.mediasoupclient.components.Dialog
@@ -89,7 +86,6 @@ fun RoomPage(
         modifier = Modifier
             .background(MaterialTheme.colorScheme.background)
             .fillMaxSize()
-            .navigationBarsPadding()
     ) {
         TopAppBar(title = { roomId?.let { Text(text = it) } })
 
@@ -107,6 +103,7 @@ fun RoomPage(
                         isCameraOff = localState.isCameraOff,
                         isMicMuted = localState.isMicMuted,
                         networkScore = 10,
+                        volume = localState.volume ?: 0,
                         label = "Me (Waiting...)",
                         isLocal = true,
                         isFrontCamera = localState.isFrontCamera
@@ -115,24 +112,21 @@ fun RoomPage(
 
                 else -> ConferenceGridLayout()
             }
-
-            ControlBottomBar(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .padding(bottom = 16.dp),
-                initOpenMic = initOpenMic,
-                initOpenCamera = initOpenCamera,
-                isMicMuted = localState.isMicMuted,
-                isCameraOff = localState.isCameraOff,
-                onToggleMic = { roomClient.toggleMic() },
-                onToggleCamera = { roomClient.toggleCamera() },
-                onFlipCamera = { roomClient.videoController.flipCamera() },
-                onHangUp = {
-                    roomVM.backDialogVisible = true
-                }
-            )
         }
+
+        ControlBottomBar(
+            modifier = Modifier.navigationBarsPadding(),
+            initOpenMic = initOpenMic,
+            initOpenCamera = initOpenCamera,
+            isMicMuted = localState.isMicMuted,
+            isCameraOff = localState.isCameraOff,
+            onToggleMic = { roomClient.toggleMic() },
+            onToggleCamera = { roomClient.toggleCamera() },
+            onFlipCamera = { roomClient.videoController.flipCamera() },
+            onHangUp = {
+                roomVM.backDialogVisible = true
+            }
+        )
     }
 
     Dialog(

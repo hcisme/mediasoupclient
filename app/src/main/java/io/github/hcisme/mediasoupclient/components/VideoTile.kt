@@ -1,5 +1,8 @@
 package io.github.hcisme.mediasoupclient.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -13,10 +16,17 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,9 +43,10 @@ fun VideoTile(
     isCameraOff: Boolean,
     isMicMuted: Boolean,
     isLocal: Boolean,
-    isFrontCamera: Boolean = false,
-    networkScore: Int,
     label: String,
+    networkScore: Int,
+    isFrontCamera: Boolean = false,
+    volume: Int = 0,
     isOverlay: Boolean = false
 ) {
     Box(modifier = modifier) {
@@ -91,14 +102,12 @@ fun VideoTile(
                     painter = painterResource(R.drawable.mic_off),
                     contentDescription = "Muted",
                     tint = Color.Red,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             } else {
-                Icon(
-                    painter = painterResource(R.drawable.mic_on),
-                    contentDescription = "Unmuted",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
+                VolumeMicIcon(
+                    volume = volume,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -143,4 +152,44 @@ private fun UserAvatarPlaceholder(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(0.4f)
         )
     }
+}
+
+/**
+ * 音量大小指示器
+ */
+@Composable
+fun VolumeMicIcon(
+    volume: Int, // 0 - 10
+    modifier: Modifier = Modifier
+) {
+    val targetFillRatio = (volume / 10f).coerceIn(0f, 1f)
+    val animatedRatio by animateFloatAsState(
+        targetValue = targetFillRatio,
+        animationSpec = tween(durationMillis = 100, easing = LinearEasing),
+        label = "volume_anim"
+    )
+
+    Icon(
+        painter = painterResource(R.drawable.mic_on),
+        contentDescription = "Active Mic",
+        tint = Color.White,
+        modifier = modifier
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithContent {
+                drawContent()
+
+                if (animatedRatio > 0.05f) {
+                    val fillHeight = size.height * animatedRatio
+
+                    drawRect(
+                        color = Color.Green,
+                        topLeft = Offset(0f, size.height - fillHeight),
+                        size = Size(size.width, fillHeight),
+                        blendMode = BlendMode.SrcIn
+                    )
+                }
+            }
+    )
 }

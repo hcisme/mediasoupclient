@@ -1,4 +1,4 @@
-package io.github.hcisme.mediasoupclient.model
+package io.github.hcisme.mediasoupclient.client
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -10,7 +10,7 @@ import org.webrtc.VideoTrack
  */
 @Serializable
 data class TransportInfo(
-    val id: String,
+    val transportId: String,
     val iceParameters: JsonObject,
     val iceCandidates: JsonElement, // 可能是 Array
     val dtlsParameters: JsonObject
@@ -48,7 +48,11 @@ data class ExistingProducer(
 @Serializable
 data class JoinResponse(
     val rtpCapabilities: JsonObject,
-    val existingProducers: List<ExistingProducer> = emptyList()
+    val existingProducers: List<ExistingProducer> = emptyList(),
+    /**
+     * socketId
+     */
+    val existingPeers: List<String> = emptyList()
 )
 
 /**
@@ -59,6 +63,7 @@ data class RemoteStreamState(
     val kind: String,
     val isPaused: Boolean,
     val score: Int = 10,
+    val volume: Int? = null,
     val socketId: String,
     val videoTrack: VideoTrack? = null
 )
@@ -76,4 +81,13 @@ data class RemotePauseResumeDataResponse(
     val producerId: String,
     val kind: String,
     val socketId: String
+)
+
+@Serializable
+data class AudioLevelData(
+    val audioProducerId: String,
+    /**
+     * -127 ~ 0
+     */
+    val volume: Int
 )

@@ -7,12 +7,6 @@ import io.github.crow_misia.mediasoup.Producer
 import io.github.hcisme.mediasoupclient.BuildConfig
 import io.github.hcisme.mediasoupclient.controller.AudioController
 import io.github.hcisme.mediasoupclient.controller.VideoController
-import io.github.hcisme.mediasoupclient.model.ConsumeResponse
-import io.github.hcisme.mediasoupclient.model.JoinResponse
-import io.github.hcisme.mediasoupclient.model.NewProducerResponse
-import io.github.hcisme.mediasoupclient.model.ProduceResponse
-import io.github.hcisme.mediasoupclient.model.RemoteStreamState
-import io.github.hcisme.mediasoupclient.model.TransportInfo
 import io.github.hcisme.mediasoupclient.utils.JsonKey
 import io.github.hcisme.mediasoupclient.utils.MediaType
 import io.github.hcisme.mediasoupclient.utils.SocketEvent
@@ -166,7 +160,8 @@ class RoomClient(private val context: Context) {
             },
             onPeerLeave = { socketId ->
                 handlePeerLeave(socketId = socketId)
-            }
+            },
+            onActiveSpeaker = { handleActiveSpeaker(volumes = it) }
         )
     }
 
@@ -217,19 +212,27 @@ class RoomClient(private val context: Context) {
         )
 
         mediaSoup.createSendTransport(
-            id = sendInfo.id,
+            id = sendInfo.transportId,
             iceParameters = sendInfo.iceParameters.toString(),
             iceCandidates = sendInfo.iceCandidates.toString(),
             dtlsParameters = sendInfo.dtlsParameters.toString()
         )
         mediaSoup.createReceiveTransport(
-            id = recvInfo.id,
+            id = recvInfo.transportId,
             iceParameters = recvInfo.iceParameters.toString(),
             iceCandidates = recvInfo.iceCandidates.toString(),
             dtlsParameters = recvInfo.dtlsParameters.toString()
         )
 
         // 处理已经在房间的用户
+        joinResponse.existingPeers.forEach { socketId ->
+            _remotePeers.update { current ->
+                if (current.containsKey(socketId)) current
+                else current + (socketId to RemotePeer(socketId))
+            }
+        }
+
+        // 处理已经在房间用户的流
         joinResponse.existingProducers.forEach { producer ->
             _remotePeers.update { current ->
                 val peer = current[producer.socketId] ?: RemotePeer(socketId = producer.socketId)
@@ -371,6 +374,31 @@ class RoomClient(private val context: Context) {
         // 防止有残留
         _remoteStreamStates.update { current ->
             current.filterValues { it.socketId != socketId }
+        }
+    }
+
+    /**
+     * 处理活跃人的声音大小
+     */
+    private fun handleActiveSpeaker(volumes: Array<AudioLevelData>) {
+        volumes.forEach { data ->
+            val audioProducerId = data.audioProducerId
+            val normalizedVolume = when {
+                data.volume >= -20 -> 10
+                data.volume >= -40 -> 7
+                data.volume >= -60 -> 4
+                data.volume >= -80 -> 1
+                else -> 0
+            }
+            // 本地
+            if (audioProducerId == localAudioProducer?.id) {
+                _localState.update { it.copy(volume = normalizedVolume) }
+            }
+
+            // 远程
+            updateRemoteState(audioProducerId) { state ->
+                state.copy(volume = normalizedVolume)
+            }
         }
     }
 
@@ -566,7 +594,8 @@ class RoomClient(private val context: Context) {
         val isCameraOff: Boolean = false,
         val isFrontCamera: Boolean = true,
         val isMicMuted: Boolean = false,
-        val videoTrack: VideoTrack? = null
+        val videoTrack: VideoTrack? = null,
+        val volume: Int? = null
     )
 
     data class RemotePeer(

@@ -1,8 +1,6 @@
 package io.github.hcisme.mediasoupclient.client
 
 import android.util.Log
-import io.github.hcisme.mediasoupclient.model.NewProducerResponse
-import io.github.hcisme.mediasoupclient.model.RemotePauseResumeDataResponse
 import io.github.hcisme.mediasoupclient.utils.JsonKey
 import io.github.hcisme.mediasoupclient.utils.SocketEvent
 import io.socket.client.IO
@@ -10,6 +8,7 @@ import io.socket.client.Socket
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import kotlin.coroutines.resume
@@ -36,6 +35,7 @@ class SignalingClient(private val serverUrl: String) {
      * @param onProducerPaused 远程暂停回调 (producerId, kind, socketId)
      * @param onProducerResumed 远程恢复回调 (producerId, kind, socketId)
      * @param onProducerScore 网络质量回调 (producerId, score)
+     * @param onActiveSpeaker 房间内说话音量大小的回调
      */
     fun connect(
         onConnect: () -> Unit,
@@ -46,7 +46,8 @@ class SignalingClient(private val serverUrl: String) {
         onConsumerClosed: (consumerId: String) -> Unit,
         onProducerPaused: (data: RemotePauseResumeDataResponse) -> Unit,
         onProducerResumed: (data: RemotePauseResumeDataResponse) -> Unit,
-        onProducerScore: (producerId: String, sore: Int) -> Unit
+        onProducerScore: (producerId: String, sore: Int) -> Unit,
+        onActiveSpeaker: (volumes: Array<AudioLevelData>) -> Unit
     ) {
         socket = IO.socket(serverUrl).apply {
             // 基础连接事件
@@ -98,6 +99,27 @@ class SignalingClient(private val serverUrl: String) {
                 val data = args.firstOrNull() as? JSONObject ?: return@on
                 val socketId = data.optString(JsonKey.SOCKET_ID)
                 onPeerLeave(socketId)
+            }
+
+            on(SocketEvent.ACTIVE_SPEAKER) { args ->
+                try {
+                    val data = args.firstOrNull() as? JSONArray
+                    if (data != null) {
+                        val list = mutableListOf<AudioLevelData>()
+                        for (i in 0..<data.length()) {
+                            val item = data.getJSONObject(i)
+                            list.add(
+                                AudioLevelData(
+                                    audioProducerId = item.getString(JsonKey.AUDIO_PRODUCER_ID),
+                                    volume = item.getInt(JsonKey.VOLUME)
+                                )
+                            )
+                        }
+                        onActiveSpeaker(list.toTypedArray())
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Parse audio level failed", e)
+                }
             }
         }
         socket?.connect()

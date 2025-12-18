@@ -8,6 +8,6 @@ import androidx.lifecycle.ViewModel
 class HomeViewModel : ViewModel() {
     var roomId by mutableStateOf("865678")
     var isEntering by mutableStateOf(false)
-    var isOpenCamera by mutableStateOf(true)
-    var isOpenMic by mutableStateOf(true)
+    var isOpenCamera by mutableStateOf(false)
+    var isOpenMic by mutableStateOf(false)
 }

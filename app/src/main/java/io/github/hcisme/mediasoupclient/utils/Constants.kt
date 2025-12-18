@@ -22,6 +22,7 @@ object SocketEvent {
     const val PRODUCER_PAUSED = "producerPaused" // 接收
     const val PRODUCER_RESUMED = "producerResumed" // 接收
     const val PRODUCER_SCORE = "producerScore" // 接收
+    const val ACTIVE_SPEAKER = "activeSpeaker"
 }
 
 /**
@@ -30,6 +31,7 @@ object SocketEvent {
 object JsonKey {
     const val ROOM_ID = "roomId"
     const val PRODUCER_ID = "producerId"
+    const val AUDIO_PRODUCER_ID = "audioProducerId"
     const val CONSUMER_ID = "consumerId"
     const val TRANSPORT_ID = "transportId"
     const val RTP_CAPABILITIES = "rtpCapabilities"
@@ -41,6 +43,7 @@ object JsonKey {
     const val PAUSED = "paused"
     const val SOCKET_ID = "socketId"
     const val SCORE = "score"
+    const val VOLUME = "volume"
 }
 
 /**

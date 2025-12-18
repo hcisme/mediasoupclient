@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 
 class RoomViewModel : ViewModel() {
+    var focusedId by mutableStateOf<String?>(null)
+
     // 退出页面的提示框
     var backDialogVisible by mutableStateOf(false)
 

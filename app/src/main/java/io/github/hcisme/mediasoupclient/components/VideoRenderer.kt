@@ -1,5 +1,6 @@
 package io.github.hcisme.mediasoupclient.components
 
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
@@ -46,6 +47,7 @@ fun VideoRenderer(
             },
             onRelease = { view ->
                 try {
+                    view.visibility = View.GONE
                     track?.removeSink(view)
                     view.release()
                 } catch (_: Exception) {
