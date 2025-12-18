@@ -35,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RoomClient(private val context: Context) {
     companion object {
         private const val TAG = "RoomClient"
-        private const val SERVER_URL = BuildConfig.BASE_URL
+        private val SERVER_URL = BuildConfig.BASE_URL
         val eglBaseContext: EglBase.Context by lazy { EglBase.create().eglBaseContext }
     }
 

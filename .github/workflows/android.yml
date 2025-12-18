@@ -79,4 +79,4 @@ jobs:
           generate_release_notes: true
           body: |
             ### 本次更新内容
-            - 测试构建
+            - 修复常量问题
