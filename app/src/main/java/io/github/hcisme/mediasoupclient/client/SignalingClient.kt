@@ -24,81 +24,47 @@ class SignalingClient(private val serverUrl: String) {
     var socket: Socket? = null
         private set
 
-    /**
-     * 连接服务器
-     * @param onConnect 连接成功回调
-     * @param onDisconnect 断开连接回调
-     * @param onPeerJoined 有人加入的回调
-     * @param onPeerLeave 有人断开连接的回调
-     * @param onNewProducer 有新人发布流回调 (data)
-     * @param onConsumerClosed 有人停止消费回调 (consumerId)
-     * @param onProducerPaused 远程暂停回调 (producerId, kind, socketId)
-     * @param onProducerResumed 远程恢复回调 (producerId, kind, socketId)
-     * @param onProducerScore 网络质量回调 (producerId, score)
-     * @param onActiveSpeaker 房间内说话音量大小的回调
-     */
-    fun connect(
-        onConnect: () -> Unit,
-        onDisconnect: () -> Unit,
-        onPeerJoined: (String) -> Unit,
-        onPeerLeave: (String) -> Unit,
-        onNewProducer: (data: NewProducerResponse) -> Unit,
-        onConsumerClosed: (consumerId: String) -> Unit,
-        onProducerPaused: (data: RemotePauseResumeDataResponse) -> Unit,
-        onProducerResumed: (data: RemotePauseResumeDataResponse) -> Unit,
-        onProducerScore: (producerId: String, sore: Int) -> Unit,
-        onActiveSpeaker: (volumes: Array<AudioLevelData>) -> Unit
-    ) {
+    fun connect(listener: ConnectListener) {
         socket = IO.socket(serverUrl).apply {
             // 基础连接事件
-            on(SocketEvent.CONNECT) { onConnect() }
+            on(SocketEvent.CONNECT) { listener.onConnect() }
 
             // 业务事件监听
             on(SocketEvent.PEER_JOINED) { args ->
                 val data = args.firstOrNull() as? JSONObject
                 val socketId = data?.optString(JsonKey.SOCKET_ID)
-                socketId?.let { onPeerJoined(it) }
+                socketId?.let { listener.onPeerJoined(socketId = it) }
             }
 
             on(SocketEvent.NEW_PRODUCER) { args ->
-                handleEvent<NewProducerResponse>(args) { onNewProducer(it) }
+                handleEvent<NewProducerResponse>(args) { listener.onNewProducer(data = it) }
             }
 
             on(SocketEvent.CONSUMER_CLOSED) { args ->
                 val data = args.firstOrNull() as? JSONObject ?: return@on
                 val consumerId = data.optString(JsonKey.CONSUMER_ID)
-                onConsumerClosed(consumerId)
+                listener.onConsumerClosed(consumerId = consumerId)
             }
 
             on(SocketEvent.PRODUCER_PAUSED) { args ->
                 handleEvent<RemotePauseResumeDataResponse>(args) {
-                    onProducerPaused(it)
+                    listener.onProducerPaused(data = it)
                 }
             }
 
             on(SocketEvent.PRODUCER_RESUMED) { args ->
                 handleEvent<RemotePauseResumeDataResponse>(args) {
-                    onProducerResumed(it)
+                    listener.onProducerResumed(data = it)
                 }
 
             }
 
-            on(SocketEvent.PRODUCER_SCORE) { args ->
-                val data = args.firstOrNull() as? JSONObject ?: return@on
-                val producerId = data.optString(JsonKey.PRODUCER_ID)
-                val scores = data.optJSONArray(JsonKey.SCORE)
-                if (scores != null && scores.length() > 0) {
-                    val scoreVal = scores.getJSONObject(0).optInt(JsonKey.SCORE, 0)
-                    onProducerScore(producerId, scoreVal)
-                }
-            }
-
-            on(SocketEvent.DISCONNECT) { onDisconnect() }
+            on(SocketEvent.DISCONNECT) { listener.onDisconnect() }
 
             on(SocketEvent.PEER_LEAVE) { args ->
                 val data = args.firstOrNull() as? JSONObject ?: return@on
                 val socketId = data.optString(JsonKey.SOCKET_ID)
-                onPeerLeave(socketId)
+                listener.onPeerLeave(socketId = socketId)
             }
 
             on(SocketEvent.ACTIVE_SPEAKER) { args ->
@@ -115,7 +81,7 @@ class SignalingClient(private val serverUrl: String) {
                                 )
                             )
                         }
-                        onActiveSpeaker(list.toTypedArray())
+                        listener.onActiveSpeaker(volumes = list.toTypedArray())
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Parse audio level failed", e)
@@ -169,5 +135,59 @@ class SignalingClient(private val serverUrl: String) {
         } catch (e: Exception) {
             Log.e(TAG, e.message, e)
         }
+    }
+
+    /**
+     * 信令事件监听器
+     */
+    interface ConnectListener {
+        /**
+         * 连接成功回调
+         */
+        fun onConnect()
+
+        /**
+         * 断开连接回调
+         */
+        fun onDisconnect()
+
+        /**
+         * 有新人加入房间的回调
+         * @param socketId 新用户的 Socket ID
+         */
+        fun onPeerJoined(socketId: String)
+
+        /**
+         * 有人离开房间的回调
+         * @param socketId 离开用户的 Socket ID
+         */
+        fun onPeerLeave(socketId: String)
+
+        /**
+         * 有新人发布流回调
+         */
+        fun onNewProducer(data: NewProducerResponse)
+
+        /**
+         * 有人停止消费（流关闭）的回调
+         * @param consumerId 被关闭的 Consumer ID
+         */
+        fun onConsumerClosed(consumerId: String)
+
+        /**
+         * 远程流暂停回调（对方关摄像头/麦克风）
+         */
+        fun onProducerPaused(data: RemotePauseResumeDataResponse)
+
+        /**
+         * 远程流恢复回调（对方开摄像头/麦克风）
+         */
+        fun onProducerResumed(data: RemotePauseResumeDataResponse)
+
+        /**
+         * 房间内说话者音量大小回调
+         * @param volumes 包含所有正在说话者的 ID 和音量数据的数组
+         */
+        fun onActiveSpeaker(volumes: Array<AudioLevelData>)
     }
 }

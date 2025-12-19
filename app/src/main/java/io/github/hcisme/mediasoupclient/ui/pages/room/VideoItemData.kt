@@ -12,10 +12,10 @@ data class VideoItemData(
     val id: String,
     val isLocal: Boolean,
     val track: VideoTrack?,
-    val isCameraOff: Boolean,
-    val isMicMuted: Boolean,
+    val isOpenCamera: Boolean,
+    val isOpenMic: Boolean,
     val isFrontCamera: Boolean = false,
-    val score: Int = 10,
     val volume: Int = 0,
-    val label: String
+    val label: String,
+    val isScreenContent: Boolean = false
 )

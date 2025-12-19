@@ -8,6 +8,10 @@ import android.media.AudioManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import io.github.hcisme.mediasoupclient.R
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import org.webrtc.AudioSource
 import org.webrtc.AudioTrack
 import org.webrtc.MediaConstraints
@@ -19,7 +23,7 @@ class AudioController(
 ) {
     companion object {
         private const val TAG = "AudioController"
-        private const val TRACK_ID = "local_audio_track"
+        private val TRACK_ID = "local_audio_track_${System.currentTimeMillis()}"
 
         // WebRTC 音频约束键名
         private const val AUDIO_ECHO_CANCELLATION_CONSTRAINT = "googEchoCancellation"
@@ -100,9 +104,20 @@ class AudioController(
     // =================================================================================
     private val audioManager by lazy { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
+    // 可用设备列表
+    private val _availableAudioDevices = MutableStateFlow<List<AudioDeviceType>>(emptyList())
+    val availableAudioDevices = _availableAudioDevices.asStateFlow()
+
+    private val _currentAudioDevice = MutableStateFlow<AudioDeviceType>(AudioDeviceType.Speaker)
+    val currentAudioDevice = _currentAudioDevice.asStateFlow()
+
     // 记录初始状态以便还原
     private var savedAudioMode: Int = AudioManager.MODE_NORMAL
     private var wasSpeakerOn: Boolean = false
+
+    init {
+        updateAvailableDevices()
+    }
 
     /**
      * 初始化音频系统 (进入通话模式)
@@ -118,32 +133,16 @@ class AudioController(
         // 切换到通话模式，WebRTC 需要在 MODE_IN_COMMUNICATION 下才能有效进行硬件回声消除
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
-        // 默认开启扬声器 (视频会议通常默认扬声器)
-        setSpeakerphoneOn(true)
-
         // 确保麦克风没被系统静音
         if (audioManager.isMicrophoneMute) {
             audioManager.isMicrophoneMute = false
         }
 
-        Log.d(TAG, "Audio system initialized in communication mode")
-    }
+        updateAvailableDevices()
+        // 默认切到扬声器
+        switchAudioDevice(AudioDeviceType.Speaker)
 
-    /**
-     * 兼容性地检查扬声器是否开启
-     *
-     * 解决 API 34 isSpeakerphoneOn Deprecated 问题
-     */
-    private fun isSpeakerOnCompat(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12 (API 31) 及以上
-            val device = audioManager.communicationDevice
-            device?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-        } else {
-            // Android 11 及以下
-            @Suppress("DEPRECATION")
-            audioManager.isSpeakerphoneOn
-        }
+        Log.d(TAG, "Audio system initialized in communication mode")
     }
 
     /**
@@ -179,6 +178,117 @@ class AudioController(
     }
 
     /**
+     * 获取当前可用设备列表
+     */
+    fun updateAvailableDevices() {
+        val list = mutableListOf<AudioDeviceType>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val devices = audioManager.availableCommunicationDevices
+            if (devices.any { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }) list.add(
+                AudioDeviceType.Speaker
+            )
+            if (devices.any { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }) list.add(
+                AudioDeviceType.Earpiece
+            )
+            if (devices.any { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO }) list.add(
+                AudioDeviceType.Bluetooth
+            )
+            if (devices.any { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET }) list.add(
+                AudioDeviceType.Headset
+            )
+        } else {
+            // 旧版本通常默认有扬声器和听筒
+            list.add(AudioDeviceType.Speaker)
+            list.add(AudioDeviceType.Earpiece)
+            // 检查蓝牙
+            if (audioManager.isBluetoothScoAvailableOffCall || audioManager.isBluetoothA2dpOn) {
+                list.add(AudioDeviceType.Bluetooth)
+            }
+            // 检查有线耳机 (简单判断)
+            //  if (audioManager.isWiredHeadsetOn) {
+            //      list.add(AudioDeviceType.Headset)
+            //  }
+        }
+        _availableAudioDevices.update { list }
+    }
+
+    /**
+     * 切换音频路由
+     */
+    fun switchAudioDevice(type: AudioDeviceType) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val devices = audioManager.availableCommunicationDevices
+            val targetDevice = when (type) {
+                AudioDeviceType.Speaker -> devices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                AudioDeviceType.Earpiece -> devices.find { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                AudioDeviceType.Bluetooth -> devices.find { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
+                AudioDeviceType.Headset -> devices.find { it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES }
+            }
+
+            if (targetDevice != null) {
+                val result = audioManager.setCommunicationDevice(targetDevice)
+                if (result) _currentAudioDevice.update { type }
+            } else {
+                // 如果找不到目标设备，清除设置，回退系统默认
+                audioManager.clearCommunicationDevice()
+                // 重新推断当前设备
+                updateAvailableDevices()
+            }
+        } else {
+            // Android 11 及以下兼容逻辑
+            @Suppress("DEPRECATION")
+            when (type) {
+                AudioDeviceType.Speaker -> {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isSpeakerphoneOn = true
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                }
+
+                AudioDeviceType.Earpiece -> {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = false
+                }
+
+                AudioDeviceType.Bluetooth -> {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.isSpeakerphoneOn = false
+                    audioManager.startBluetoothSco()
+                    audioManager.isBluetoothScoOn = true
+                }
+
+                AudioDeviceType.Headset -> {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = false
+                }
+            }
+            _currentAudioDevice.update { type }
+        }
+    }
+
+    /**
+     * 兼容性地检查扬声器是否开启
+     *
+     * 解决 API 34 isSpeakerphoneOn Deprecated 问题
+     */
+    private fun isSpeakerOnCompat(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12 (API 31) 及以上
+            val device = audioManager.communicationDevice
+            device?.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        } else {
+            // Android 11 及以下
+            @Suppress("DEPRECATION")
+            audioManager.isSpeakerphoneOn
+        }
+    }
+
+    /**
      * 还原音频系统
      */
     private fun disposeAudioSystem() {
@@ -189,6 +299,11 @@ class AudioController(
         } else {
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = wasSpeakerOn
+            @Suppress("DEPRECATION")
+            if (audioManager.isBluetoothScoOn) {
+                audioManager.isBluetoothScoOn = false
+                audioManager.stopBluetoothSco()
+            }
         }
         // 还原模式
         audioManager.mode = savedAudioMode
@@ -203,5 +318,15 @@ class AudioController(
         Log.i(TAG, "Dispose called")
         disposeWebRTC()
         disposeAudioSystem()
+    }
+
+    /**
+     * 支持的音频输出设备类型
+     */
+    enum class AudioDeviceType(val label: String, val iconRes: Int) {
+        Speaker("扬声器", R.drawable.speraker),
+        Earpiece("听筒", R.drawable.ear_sound),
+        Bluetooth("蓝牙设备", R.drawable.bluetooth),
+        Headset("有线耳机", R.drawable.headset_mic)
     }
 }

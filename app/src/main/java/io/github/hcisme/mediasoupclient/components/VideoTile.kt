@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
@@ -40,38 +39,28 @@ import org.webrtc.VideoTrack
 fun VideoTile(
     modifier: Modifier = Modifier,
     videoTrack: VideoTrack?,
-    isCameraOff: Boolean,
-    isMicMuted: Boolean,
+    isOpenCamera: Boolean,
+    isOpenMic: Boolean,
     isLocal: Boolean,
     label: String,
-    networkScore: Int,
     isFrontCamera: Boolean = false,
     volume: Int = 0,
-    isOverlay: Boolean = false
+    isOverlay: Boolean = false,
+    isScreenContent: Boolean = false
 ) {
     Box(modifier = modifier) {
-        if (!isCameraOff && videoTrack != null) {
+        if (isOpenCamera && videoTrack != null) {
             VideoRenderer(
                 track = videoTrack,
                 eglContext = RoomClient.eglBaseContext,
                 modifier = Modifier.fillMaxSize(),
                 isLocal = isLocal,
                 isFrontCamera = isFrontCamera,
-                isOverlay = isOverlay
+                isOverlay = isOverlay,
+                isScreenContent = isScreenContent
             )
         } else {
             UserAvatarPlaceholder(Modifier.fillMaxSize())
-        }
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                .padding(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            NetworkQualityIcon(score = networkScore)
         }
 
         Row(
@@ -97,43 +86,21 @@ fun VideoTile(
                 modifier = Modifier.weight(1f)
             )
 
-            if (isMicMuted) {
+            if (isOpenMic) {
+                VolumeMicIcon(
+                    volume = volume,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
                 Icon(
                     painter = painterResource(R.drawable.mic_off),
                     contentDescription = "Muted",
                     tint = Color.Red,
                     modifier = Modifier.size(20.dp)
                 )
-            } else {
-                VolumeMicIcon(
-                    volume = volume,
-                    modifier = Modifier.size(20.dp)
-                )
             }
         }
     }
-}
-
-/**
- * 网络信号图标
- */
-@Composable
-private fun NetworkQualityIcon(score: Int, modifier: Modifier = Modifier) {
-    // Mediasoup score 范围 0-10
-    // 9-10: 优 (绿), 7-8: 良 (黄), 4-6: 中 (橙), <4: 差 (红)
-    val (color, icon) = when {
-        score >= 9 -> Color.Green to R.drawable.signal4
-        score >= 7 -> Color.Yellow to R.drawable.signal3
-        score >= 4 -> Color(0xFFFFA500) to R.drawable.signal2
-        else -> Color.Red to R.drawable.signal1
-    }
-
-    Icon(
-        painter = painterResource(icon),
-        tint = color,
-        contentDescription = "Network Signal $score",
-        modifier = modifier.size(20.dp)
-    )
 }
 
 /**

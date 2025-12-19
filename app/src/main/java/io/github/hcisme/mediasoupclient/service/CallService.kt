@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -20,24 +19,46 @@ import io.github.hcisme.mediasoupclient.R
 
 class CallService : Service() {
     companion object {
+        private const val TAG = "CallService"
         private const val START_FOREGROUND_SERVICE_ID = 1
-        const val DEFAULT_CHANNEL_ID = "default_channel_id_$START_FOREGROUND_SERVICE_ID"
-        const val CHANNEL_ID = "channel_id_$START_FOREGROUND_SERVICE_ID"
-        const val CONTENT_TITLE = "正在通话中"
-        const val CHANNEL_NAME = "点击返回"
+        private const val DEFAULT_CHANNEL_ID = "default_channel_id_$START_FOREGROUND_SERVICE_ID"
+        private const val CHANNEL_ID = "channel_id_$START_FOREGROUND_SERVICE_ID"
+        private const val CONTENT_TITLE = "正在通话中"
+        private const val CHANNEL_NAME = "点击返回"
+        const val EXTRA_IS_SCREEN_SHARE = "extra_is_screen_share"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        startForegroundServiceCompat()
+        updateServiceState(isScreenSharing = false)
     }
 
-    private fun startForegroundServiceCompat() {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 每次调用 startService/startForegroundService 都会走到这里
+        // Intent 中的参数，更新服务类型
+        val isScreenSharing = intent?.getBooleanExtra(EXTRA_IS_SCREEN_SHARE, false) ?: false
+        updateServiceState(isScreenSharing)
+        return START_NOT_STICKY
+    }
+
+    /**
+     * 更新前台服务状态
+     * @param isScreenSharing 是否正在屏幕共享
+     */
+    private fun updateServiceState(isScreenSharing: Boolean) {
         val notification = createNotification()
-        val serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+
+        // 基础类型：麦克风 + 摄像头
+        var serviceType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+
+        // 如果是屏幕共享且系统版本 >= Android 10 (Q)，叠加 mediaProjection 类型
+        if (isScreenSharing && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // 必须确保此时 App 已经有了录屏权限，否则在 Android 14+ 会崩溃
+            serviceType = serviceType or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+        }
 
         try {
             ServiceCompat.startForeground(
@@ -47,7 +68,7 @@ class CallService : Service() {
                 serviceType
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "StartForeground Fail", e)
         }
     }
 
@@ -102,9 +123,26 @@ class CallService : Service() {
 object CallServiceManager {
     private const val TAG = "CallServiceManager"
 
+    /**
+     * 启动服务 (基础模式：仅麦克风/摄像头)
+     */
     fun start(context: Context) {
+        startOrUpdate(context, isScreenSharing = false)
+    }
+
+    /**
+     * 更新服务状态 (开启/关闭屏幕共享)
+     * 在用户授权录屏后调用此方法传入 true
+     */
+    fun updateScreenShareState(context: Context, isSharing: Boolean) {
+        startOrUpdate(context, isScreenSharing = isSharing)
+    }
+
+    private fun startOrUpdate(context: Context, isScreenSharing: Boolean) {
         val appContext = context.applicationContext
-        val intent = Intent(appContext, CallService::class.java)
+        val intent = Intent(appContext, CallService::class.java).apply {
+            putExtra(CallService.EXTRA_IS_SCREEN_SHARE, isScreenSharing)
+        }
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -113,11 +151,7 @@ object CallServiceManager {
                 appContext.startService(intent)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "启动服务失败: ${e.message}")
-            e.printStackTrace()
-            runCatching {
-                Toast.makeText(appContext, "无法启动通话服务", Toast.LENGTH_SHORT).show()
-            }
+            Log.e(TAG, "启动/更新服务失败", e)
         }
     }
 

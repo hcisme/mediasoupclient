@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -30,7 +28,6 @@ import io.github.hcisme.mediasoupclient.service.CallServiceManager
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
 import io.github.hcisme.mediasoupclient.utils.LocalRoomClient
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomPage(
     roomId: String,
@@ -51,9 +48,8 @@ fun RoomPage(
         }
     }
 
-    val roomId by roomClient.currentRoomId.collectAsState()
+    // 本地
     val localState by roomClient.localState.collectAsState()
-
     // 远程
     val remotePeersMap by roomClient.remotePeers.collectAsState()
 
@@ -64,7 +60,6 @@ fun RoomPage(
         }
 
         onDispose {
-            CallServiceManager.stop(context = context)
             insetsController?.apply {
                 isAppearanceLightStatusBars = true
                 isAppearanceLightNavigationBars = true
@@ -72,6 +67,7 @@ fun RoomPage(
 
             roomClient.audioController.setSpeakerphoneOn(false)
             roomClient.exitRoom()
+            CallServiceManager.stop(context = context)
         }
     }
 
@@ -87,7 +83,7 @@ fun RoomPage(
             .background(MaterialTheme.colorScheme.background)
             .fillMaxSize()
     ) {
-        TopAppBar(title = { roomId?.let { Text(text = it) } })
+        RoomTopBar()
 
         Box(
             modifier = Modifier
@@ -97,16 +93,21 @@ fun RoomPage(
         ) {
             when (remotePeersMap.size) {
                 0 -> {
+                    val isLocalScreenSharing = localState.isOpenScreenShare
+                    val localScreenTrack =
+                        if (isLocalScreenSharing) localState.screenTrack else null
+                    val showLocalScreen = localScreenTrack != null
+
                     VideoTile(
                         modifier = Modifier.fillMaxSize(),
-                        videoTrack = localState.videoTrack,
-                        isCameraOff = localState.isCameraOff,
-                        isMicMuted = localState.isMicMuted,
-                        networkScore = 10,
+                        videoTrack = if (showLocalScreen) localScreenTrack else localState.videoTrack,
+                        isOpenCamera = if (showLocalScreen) true else localState.isOpenCamera,
+                        isOpenMic = localState.isOpenMic,
                         volume = localState.volume ?: 0,
                         label = "Me (Waiting...)",
                         isLocal = true,
-                        isFrontCamera = localState.isFrontCamera
+                        isFrontCamera = if (showLocalScreen) false else localState.isFrontCamera,
+                        isScreenContent = showLocalScreen
                     )
                 }
 
@@ -118,14 +119,14 @@ fun RoomPage(
             modifier = Modifier.navigationBarsPadding(),
             initOpenMic = initOpenMic,
             initOpenCamera = initOpenCamera,
-            isMicMuted = localState.isMicMuted,
-            isCameraOff = localState.isCameraOff,
+            isOpenMic = localState.isOpenMic,
+            isOpenCamera = localState.isOpenCamera,
+            isOpenScreenShare = localState.isOpenScreenShare,
             onToggleMic = { roomClient.toggleMic() },
             onToggleCamera = { roomClient.toggleCamera() },
             onFlipCamera = { roomClient.videoController.flipCamera() },
-            onHangUp = {
-                roomVM.backDialogVisible = true
-            }
+            onToggleScreenShare = { roomClient.toggleScreenShare(permissionIntent = it) },
+            onHangUp = { roomVM.backDialogVisible = true }
         )
     }
 

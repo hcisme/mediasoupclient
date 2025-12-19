@@ -9,6 +9,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigation.compose.rememberNavController
 import io.github.hcisme.mediasoupclient.client.RoomClient
+import io.github.hcisme.mediasoupclient.components.NotificationManager
+import io.github.hcisme.mediasoupclient.components.NotificationPopup
 import io.github.hcisme.mediasoupclient.navigation.AppNav
 import io.github.hcisme.mediasoupclient.ui.theme.MediaSoupClientTheme
 import io.github.hcisme.mediasoupclient.utils.LocalNavController
@@ -35,6 +37,10 @@ class MainActivity : ComponentActivity() {
                     darkTheme = false
                 ) {
                     AppNav()
+
+                    NotificationPopup(NotificationManager.notificationState) {
+                        NotificationManager.hide()
+                    }
                 }
             }
         }

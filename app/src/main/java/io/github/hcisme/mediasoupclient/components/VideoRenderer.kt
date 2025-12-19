@@ -17,7 +17,8 @@ fun VideoRenderer(
     isLocal: Boolean,
     isFrontCamera: Boolean,
     eglContext: EglBase.Context,
-    isOverlay: Boolean = false
+    isOverlay: Boolean = false,
+    isScreenContent: Boolean = false
 ) {
     key(track?.id()) {
         AndroidView(
@@ -25,7 +26,10 @@ fun VideoRenderer(
             factory = { context ->
                 SurfaceViewRenderer(context).apply {
                     init(eglContext, null)
-                    setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
+                    setScalingType(
+                        if (isScreenContent) RendererCommon.ScalingType.SCALE_ASPECT_FIT
+                        else RendererCommon.ScalingType.SCALE_ASPECT_FILL
+                    )
                     setEnableHardwareScaler(true)
                     setZOrderMediaOverlay(isOverlay)
                 }

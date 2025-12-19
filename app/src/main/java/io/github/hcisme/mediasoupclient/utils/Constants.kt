@@ -21,8 +21,8 @@ object SocketEvent {
 
     const val PRODUCER_PAUSED = "producerPaused" // 接收
     const val PRODUCER_RESUMED = "producerResumed" // 接收
-    const val PRODUCER_SCORE = "producerScore" // 接收
     const val ACTIVE_SPEAKER = "activeSpeaker"
+    const val CLOSE_PRODUCER = "closeProducer"
 }
 
 /**
@@ -42,7 +42,6 @@ object JsonKey {
     const val APP_DATA = "appData"
     const val PAUSED = "paused"
     const val SOCKET_ID = "socketId"
-    const val SCORE = "score"
     const val VOLUME = "volume"
 }
 
@@ -52,15 +51,32 @@ object JsonKey {
 object MediaType {
     const val VIDEO = "video"
     const val AUDIO = "audio"
+    const val SCREEN = "screen"
+}
+
+/**
+ * 媒体类型
+ */
+object AppDataType {
+    const val WEB_CAM = "webcam"
+    const val MIC = "mic"
+    const val SCREEN = "screen"
 }
 
 /**
  * WebRTC 配置常量
  */
 object WebRTCConfig {
-    const val VIDEO_TRACK_ID = "local_video"
-    const val CAPTURE_THREAD_NAME = "Cap"
     const val VIDEO_WIDTH = 320
     const val VIDEO_HEIGHT = 240
+    const val VIDEO_FPS = 15
+}
+
+/**
+ * 屏幕捕获 配置常量
+ */
+object ScreenCaptureConfig {
+    const val VIDEO_WIDTH = 1280
+    const val VIDEO_HEIGHT = 720
     const val VIDEO_FPS = 15
 }

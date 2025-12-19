@@ -79,4 +79,5 @@ jobs:
           generate_release_notes: true
           body: |
             ### 本次更新内容
-            - 修复常量问题
+            - 增加屏幕共享功能
+            - 增加音频输出的选择

@@ -1,6 +1,12 @@
 package io.github.hcisme.mediasoupclient.ui.pages.room
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -15,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +35,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import io.github.hcisme.mediasoupclient.R
 import io.github.hcisme.mediasoupclient.components.Dialog
+import io.github.hcisme.mediasoupclient.components.NotificationManager
 import io.github.hcisme.mediasoupclient.utils.PermissionPreferenceManager
 import io.github.hcisme.mediasoupclient.utils.startSettingActivity
 
@@ -37,41 +45,64 @@ fun ControlBottomBar(
     modifier: Modifier = Modifier,
     initOpenCamera: Boolean,
     initOpenMic: Boolean,
-    isMicMuted: Boolean,
-    isCameraOff: Boolean,
+    isOpenMic: Boolean,
+    isOpenCamera: Boolean,
+    isOpenScreenShare: Boolean,
     onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
     onFlipCamera: () -> Unit,
+    onToggleScreenShare: (data: Intent?) -> Unit,
     onHangUp: () -> Unit
 ) {
     val context = LocalContext.current
     val audioPermissionState = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    val mediaProjectionManager = remember {
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+    }
+    val screenShareLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            onToggleScreenShare(result.data)
+        } else {
+            NotificationManager.show("已取消屏幕共享")
+        }
+    }
     val roomVM = viewModel<RoomViewModel>()
 
     // 麦克风
     val onChangeMicrophoneStatus = {
-        if (isMicMuted) {
+        if (isOpenMic) {
+            onToggleMic()
+        } else {
             if (audioPermissionState.status.isGranted) {
                 onToggleMic()
             } else {
                 roomVM.audioDialogVisible = true
             }
-        } else {
-            onToggleMic()
         }
     }
 
     // 视频
     val onChangeVideoStatus = {
-        if (isCameraOff) {
+        if (isOpenCamera) {
+            onToggleCamera()
+        } else {
             if (cameraPermissionState.status.isGranted) {
                 onToggleCamera()
             } else {
                 roomVM.videoDialogVisible = true
             }
+        }
+    }
+
+    // 屏幕共享
+    val onChangeScreenShare = {
+        if (isOpenScreenShare) {
+            onToggleScreenShare(null)
         } else {
-            onToggleCamera()
+            screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
         }
     }
 
@@ -96,15 +127,15 @@ fun ControlBottomBar(
     ) {
         // 麦克风按钮
         ControlButton(
-            icon = if (isMicMuted) R.drawable.mic_off else R.drawable.mic_on,
-            isActive = !isMicMuted,
+            icon = if (isOpenMic) R.drawable.mic_on else R.drawable.mic_off,
+            isActive = isOpenMic,
             onClick = onChangeMicrophoneStatus
         )
 
         // 摄像头按钮
         ControlButton(
-            icon = if (isCameraOff) R.drawable.cam_off else R.drawable.cam_on,
-            isActive = !isCameraOff,
+            icon = if (isOpenCamera) R.drawable.cam_on else R.drawable.cam_off,
+            isActive = isOpenCamera,
             onClick = onChangeVideoStatus
         )
 
@@ -121,6 +152,13 @@ fun ControlBottomBar(
                 tint = Color.Black
             )
         }
+
+        // 共享屏幕按钮
+        ControlButton(
+            icon = if (isOpenScreenShare) R.drawable.screen_share else R.drawable.screen_share_off,
+            isActive = isOpenScreenShare,
+            onClick = onChangeScreenShare
+        )
 
         // 挂断按钮
         IconButton(

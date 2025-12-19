@@ -39,7 +39,8 @@ data class ExistingProducer(
     val producerId: String,
     val kind: String,
     val paused: Boolean,
-    val socketId: String
+    val socketId: String,
+    val appData: AppData
 )
 
 /**
@@ -60,12 +61,13 @@ data class JoinResponse(
  */
 data class RemoteStreamState(
     val producerId: String,
-    val kind: String,
-    val isPaused: Boolean,
-    val score: Int = 10,
-    val volume: Int? = null,
     val socketId: String,
-    val videoTrack: VideoTrack? = null
+    val kind: String,
+    val videoTrack: VideoTrack? = null,
+    val screenTrack: VideoTrack? = null,
+    val isPaused: Boolean,
+    val volume: Int? = null,
+    val isScreenShare: Boolean
 )
 
 @Serializable
@@ -73,8 +75,12 @@ data class NewProducerResponse(
     val producerId: String,
     val socketId: String,
     val kind: String,
-    val paused: Boolean
+    val paused: Boolean,
+    val appData: AppData
 )
+
+@Serializable
+data class AppData(val source: String)
 
 @Serializable
 data class RemotePauseResumeDataResponse(

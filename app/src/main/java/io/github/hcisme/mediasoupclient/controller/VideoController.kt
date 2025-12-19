@@ -5,10 +5,12 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import io.github.hcisme.mediasoupclient.client.safeDispose
 import io.github.hcisme.mediasoupclient.utils.WebRTCConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import org.webrtc.Camera2Enumerator
 import org.webrtc.CameraVideoCapturer
 import org.webrtc.EglBase
@@ -26,8 +28,8 @@ class VideoController(
 ) {
     companion object {
         private const val TAG = "VideoController"
-        private const val THREAD_NAME = "CaptureThread"
-        private const val TRACK_ID = "local_video_track"
+        private const val THREAD_NAME = "VideoCaptureThread"
+        private val TRACK_ID = "local_video_track${System.currentTimeMillis()}"
     }
 
     // 内部使用
@@ -99,7 +101,7 @@ class VideoController(
             videoTrack.setEnabled(true)
 
             // 更新状态
-            _localVideoTrackFlow.value = videoTrack
+            _localVideoTrackFlow.update { videoTrack }
             Log.i(TAG, "Video capture started successfully. Track ID: $TRACK_ID")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting video capture", e)
@@ -123,7 +125,7 @@ class VideoController(
             currentDeviceName = name
 
             val isFront = enumerator.isFrontFacing(name)
-            _isFrontCamera.value = isFront
+            _isFrontCamera.update { isFront }
             Log.i(TAG, "Selected camera: $name (isFront: $isFront)")
 
             enumerator.createCapturer(name, null)
@@ -167,7 +169,7 @@ class VideoController(
         val switchHandler = object : CameraVideoCapturer.CameraSwitchHandler {
             override fun onCameraSwitchDone(isFront: Boolean) {
                 isSwitching.set(false)
-                _isFrontCamera.value = isFront
+                _isFrontCamera.update { isFront }
 
                 // 如果指定了 targetName，更新 currentDeviceName
                 if (targetName != null) {
@@ -238,7 +240,7 @@ class VideoController(
             videoSource?.dispose()
 
             // 释放 Track
-            _localVideoTrackFlow.value?.dispose()
+            _localVideoTrackFlow.value?.safeDispose()
 
             // 释放 EGL 上下文
             surfaceTextureHelper?.dispose()
@@ -249,7 +251,7 @@ class VideoController(
         } finally {
             videoCapturer = null
             videoSource = null
-            _localVideoTrackFlow.value = null
+            _localVideoTrackFlow.update { null }
             surfaceTextureHelper = null
         }
     }

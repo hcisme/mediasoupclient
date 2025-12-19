@@ -41,7 +41,8 @@ class MediaSoupManager(
     var onConnectTransport: ((id: String, dtlsParameters: String) -> Unit)? = null
 
     // 当 SendTransport 产生数据时回调 (同步阻塞返回 ID)
-    var onProduceTransport: ((id: String, kind: String, rtpParameters: String) -> String)? = null
+    var onProduceTransport: ((id: String, kind: String, rtpParameters: String, appData: String?) -> String)? =
+        null
 
     init {
         intMediaSoupAndWebRTC()
@@ -119,7 +120,7 @@ class MediaSoupManager(
             rtpParameters: String,
             appData: String?
         ): String {
-            return onProduceTransport?.invoke(transport.id, kind, rtpParameters) ?: ""
+            return onProduceTransport?.invoke(transport.id, kind, rtpParameters, appData) ?: ""
         }
 
         override fun onConnectionStateChange(transport: Transport, newState: String) {
